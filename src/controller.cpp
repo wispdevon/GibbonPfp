@@ -21,6 +21,10 @@ static QString thumbnailKey(const QString &path) {
 QImage ImageStore::requestImage(const QString &id, QSize *size, const QSize &requested) {
     QMutexLocker lock(&mutex);
     auto image = images.value(id.section('?', 0, 0));
+    if (image.isNull() && id.startsWith("thumb")) {
+        image = QImage(96, 128, QImage::Format_RGBA8888);
+        image.fill(Qt::transparent);
+    }
     if (size)
         *size = image.size();
     return requested.isValid()

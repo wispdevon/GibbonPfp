@@ -21,6 +21,7 @@ jobs:
     timeout-minutes: 90
     env:
       VCPKG_BINARY_SOURCES: clear;files,${{ github.workspace }}/.cache/vcpkg,readwrite
+      VCPKG_MAX_CONCURRENCY: '3'
       QT_QPA_PLATFORM: offscreen
       QT_QUICK_BACKEND: software
       MACOSX_DEPLOYMENT_TARGET: '14.0'
@@ -103,8 +104,7 @@ jobs:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
           bash scripts/sign_macos.sh dist/portable/gibbonpfp.app
-          dist/portable/gibbonpfp.app/Contents/MacOS/gibbonpfp --version
-          dist/portable/gibbonpfp.app/Contents/MacOS/gibbonpfp --smoke-test
+          python scripts/test_packaged.py dist/portable gibbonpfp.app/Contents/MacOS/gibbonpfp
           hdiutil create -volname GibbonPfp -srcfolder dist/portable -ov -format UDZO dist/GibbonPfp-0.1.0-${{ matrix.name }}.dmg
           if [[ -n "$APPLE_CERTIFICATE_BASE64" ]]; then
             xcrun notarytool submit dist/GibbonPfp-0.1.0-${{ matrix.name }}.dmg --apple-id "$APPLE_ID" --password "$APPLE_APP_PASSWORD" --team-id "$APPLE_TEAM_ID" --wait
@@ -119,9 +119,8 @@ jobs:
         env:
           GIBBON_DISABLE_SOURCE_MODELS: '1'
         run: |
-          if [[ "$RUNNER_OS" == "Windows" ]]; then exe=dist/portable/bin/gibbonpfp.exe; else exe=dist/portable/bin/gibbonpfp; fi
-          python scripts/test_cli.py "$exe"
-          "$exe" --smoke-test
+          if [[ "$RUNNER_OS" == "Windows" ]]; then exe=bin/gibbonpfp.exe; else exe=bin/gibbonpfp; fi
+          python scripts/test_packaged.py dist/portable "$exe"
       - uses: actions/upload-artifact@v4
         with:
           name: GibbonPfp-${{ matrix.name }}

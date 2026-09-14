@@ -259,8 +259,8 @@ Result Engine::process(const QString &path, const Settings &s, std::atomic_bool 
     r.sourceSize = source.size();
     r.source = source.scaled(1200, 1200, Qt::KeepAspectRatio, Qt::SmoothTransformation)
                    .convertToFormat(QImage::Format_RGBA8888);
-    auto small = source.scaled(960, 960, Qt::KeepAspectRatio, Qt::SmoothTransformation);
-    cv::Mat analysis = rgbMat(small);
+    auto analysisImage = source.scaled(960, 960, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+    cv::Mat analysis = rgbMat(analysisImage);
     checkCancel(cancel);
     std::vector<cv::Rect> faces;
     if ((s.autoCrop && s.crop.isNull()) || !s.reference.isEmpty())

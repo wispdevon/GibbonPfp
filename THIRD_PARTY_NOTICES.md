@@ -12,6 +12,8 @@ provide the source/relinking materials required by the selected licenses.
 | LibRaw | https://www.libraw.org/ | LGPL-2.1 or CDDL-1.0 |
 | libheif | https://github.com/strukturag/libheif | LGPL-3.0 |
 | libde265 decoder | https://github.com/strukturag/libde265 | LGPL-3.0 |
+| libtiff | https://gitlab.com/libtiff/libtiff | libtiff license |
+| libwebp | https://chromium.googlesource.com/webm/libwebp | BSD-3-Clause |
 | YuNet 2023 model | https://github.com/opencv/opencv_zoo/tree/main/models/face_detection_yunet | MIT |
 | PPHumanSeg 2023 model | https://github.com/opencv/opencv_zoo/tree/main/models/human_segmentation_pphumanseg | Apache-2.0 |
 | BiRefNet portrait model | https://github.com/ZhengPeng7/BiRefNet | MIT |
@@ -25,5 +27,6 @@ Fast model notices and font license texts are included in the source tree.
 Release builds use shared dependencies. The vcpkg baseline fixes dependency
 source revisions and includes their copyright files in release license bundles.
 HEIC encoding is disabled; the GPL x265 encoder is not a dependency of the release
-configuration. Qt image format plugins provide JPEG/PNG/WebP/TIFF decoding.
+configuration. Qt image format plugins provide JPEG decoding; dedicated libtiff
+and libwebp decoders make TIFF/WebP independent of optional Qt plugins.
 See `docs/BUILDING.md` for reproducible build and dependency source instructions.

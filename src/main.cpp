@@ -4,6 +4,7 @@
 #include <QFile>
 #include <QFontDatabase>
 #include <QGuiApplication>
+#include <QIcon>
 #include <QJsonDocument>
 #include <QQmlApplicationEngine>
 #include <QQmlContext>
@@ -213,6 +214,7 @@ int main(int argc, char **argv) {
         QFontDatabase::addApplicationFont(":/assets/fonts/SpaceGrotesk.ttf");
         QFontDatabase::addApplicationFont(":/assets/fonts/GeistMono.ttf");
         QGuiApplication::setFont(QFont("Inter", 10));
+        QGuiApplication::setWindowIcon(QIcon(":/assets/gibbonpfp.png"));
         QQuickStyle::setStyle("Fusion");
         QQmlApplicationEngine qml;
         auto *store = new ImageStore;

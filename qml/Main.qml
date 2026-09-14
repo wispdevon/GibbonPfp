@@ -46,7 +46,7 @@ ApplicationWindow {
     component Caption: Label { color: muted; font.pixelSize: 11; font.letterSpacing: 1.8; font.weight: Font.DemiBold }
     component FieldLabel: Label { Layout.fillWidth: true; color: ink; font.pixelSize: 12; wrapMode: Text.WordWrap }
     component Rule: Rectangle { Layout.fillWidth: true; height: 1; color: line }
-    component Entry: TextField { implicitHeight: 38; color: ink; selectByMouse: true; font.pixelSize: 12; background: Rectangle { color: panel; radius: 8; border.color: parent.activeFocus ? accent : line } }
+    component Entry: TextField { implicitHeight: 38; color: ink; placeholderTextColor: muted; selectByMouse: true; font.pixelSize: 12; background: Rectangle { color: panel; radius: 8; border.color: parent.activeFocus ? accent : line } }
     component Choice: ComboBox { implicitHeight: 38; font.pixelSize: 12; palette.button: panel; palette.text: ink; palette.buttonText: ink; background: Rectangle { color: panel; radius: 8; border.color: parent.activeFocus ? accent : line } }
 
     Canvas {
@@ -203,7 +203,7 @@ ApplicationWindow {
                         Caption { text: "01 / FRAME" }
                         CheckBox { text: "Automatic portrait crop"; checked: backend.settings.autoCrop; onClicked: {backend.set("autoCrop",checked);backend.set("crop",[0,0,0,0]);backend.preview()} }
                         RowLayout { Layout.fillWidth: true; FieldLabel { text: "Headroom" } Item {Layout.fillWidth: true} Label { text: Math.round(backend.settings.headroom*100)+"%"; color: muted; font.family: "Geist Mono"; font.pixelSize: 11 } }
-                        Slider { Layout.fillWidth: true; from: 0; to: .25; stepSize: .01; value: backend.settings.headroom; Accessible.name: "Headroom"; onMoved: backend.set("headroom",value); onPressedChanged: if(!pressed){backend.set("crop",[0,0,0,0]);backend.preview()} }
+                        Slider { Layout.fillWidth: true; enabled: backend.settings.autoCrop; from: 0; to: .25; stepSize: .01; value: backend.settings.headroom; Accessible.name: "Headroom"; onMoved: backend.set("headroom",value); onPressedChanged: if(!pressed){backend.set("crop",[0,0,0,0]);backend.preview()} }
                         FieldLabel { text: "Crop zoom · drag or use arrow keys in Crop view" }
                         Slider { Layout.fillWidth: true; from: 1; to: 4; value: 1; Accessible.name: "Crop zoom"; onPressedChanged: if(!pressed&&backend.result.sourceWidth){let r=backend.result;let h=Math.min(r.sourceHeight,r.sourceWidth/0.75)/value;let w=h*.75;let nw=w/r.sourceWidth;let nh=h/r.sourceHeight;backend.setCrop(Math.max(0,Math.min(1-nw,r.cropX+r.cropW/2-nw/2)),Math.max(0,Math.min(1-nh,r.cropY+r.cropH/2-nh/2)),nw,nh);viewMode=1} }
                         RowLayout { Layout.fillWidth: true
@@ -236,7 +236,7 @@ ApplicationWindow {
                         Rule {}
                         Caption { text: "03 / EXPORT" }
                         CheckBox { text: "Limit to 360 × 480"; checked: backend.settings.capped; onClicked: {backend.set("capped",checked);backend.setSize(0,0);backend.preview()} }
-                        Choice { visible: !backend.settings.capped; Layout.fillWidth: true; model: ["Source crop size", "720 × 960", "1080 × 1440", "Custom…"]; onActivated: {if(currentIndex===3)sizeDialog.open();else{let n=[0,240,360][currentIndex];backend.set("crop",backend.settings.crop);backend.setSize(n*3,n*4);backend.preview()}} }
+                        Choice { visible: !backend.settings.capped; Layout.fillWidth: true; model: ["Source crop size", "720 × 960", "1080 × 1440", "Custom…"]; currentIndex: backend.settings.width===0?0:backend.settings.width===720?1:backend.settings.width===1080?2:3; onActivated: {if(currentIndex===3)sizeDialog.open();else{let n=[0,240,360][currentIndex];backend.setSize(n*3,n*4);backend.preview()}} }
                         Choice { Layout.fillWidth: true; model: ["JPEG · solid background", "PNG · transparency"]; currentIndex: backend.settings.format==="png"?1:0; onActivated: {backend.set("format",currentIndex===0?"jpeg":"png");backend.preview()} }
                         RowLayout { visible: backend.settings.format==="jpeg"; Layout.fillWidth: true; FieldLabel { text: "Backdrop" } Action { text: backend.settings.backgroundColor; Layout.fillWidth: true; onClicked: backdrop.open() } }
                         FieldLabel { visible: backend.settings.format==="jpeg"; text: "JPEG quality · "+backend.settings.quality }
