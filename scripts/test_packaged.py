@@ -7,6 +7,11 @@ import subprocess
 import sys
 import tempfile
 
+if sys.platform == 'win32':
+    import ctypes
+    # Loader failures must return an error, rather than waiting on a modal dialog.
+    ctypes.windll.kernel32.SetErrorMode(0x0001 | 0x0002 | 0x8000)
+
 root = pathlib.Path(sys.argv[1]).resolve()
 relative = pathlib.Path(sys.argv[2])
 env = dict(os.environ)
@@ -22,6 +27,18 @@ with tempfile.TemporaryDirectory(prefix='gibbon-relocated-') as temp:
     target = pathlib.Path(temp) / 'distribution'
     shutil.copytree(root, target, symlinks=True)
     exe = target / relative
+    if sys.platform == 'win32' and shutil.which('dumpbin'):
+        import re
+        available = {p.name.lower() for p in exe.parent.glob('*.dll')}
+        available.update(p.name.lower() for p in (pathlib.Path(env['SystemRoot']) / 'System32').glob('*.dll'))
+        missing = set()
+        for binary in [exe, *exe.parent.glob('*.dll')]:
+            imports = subprocess.check_output(['dumpbin', '/DEPENDENTS', str(binary)], text=True)
+            for name in re.findall(r'^\s+([\w.-]+\.dll)\s*$', imports, re.MULTILINE | re.IGNORECASE):
+                name = name.lower()
+                if name not in available and not name.startswith(('api-ms-', 'ext-ms-')):
+                    missing.add((binary.name, name))
+        assert not missing, f'Missing Windows runtime dependencies: {sorted(missing)}'
     if sys.platform.startswith('linux'):
         from prune_linux_runtime import GLIBC
         assert not [p for p in target.rglob('*') if GLIBC.fullmatch(p.name)], 'Distribution must use host glibc'

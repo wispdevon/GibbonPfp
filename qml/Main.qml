@@ -289,8 +289,8 @@ ApplicationWindow {
             Action { text: "Repair Fast model"; Layout.fillWidth: true; onClicked: {modelDialog.close();backend.installModel("fast")} }
         }
     }
-    Shortcut { sequence: StandardKey.Open; onActivated: photos.open() }
-    Shortcut { sequence: StandardKey.Undo; onActivated: backend.undo() }
+    Shortcut { sequences: [StandardKey.Open]; onActivated: photos.open() }
+    Shortcut { sequences: [StandardKey.Undo]; onActivated: backend.undo() }
     Shortcut { sequence: "Ctrl+Return"; onActivated: backend.preview() }
     Shortcut { sequence: "Left"; enabled: viewMode===1&&!backend.busy; onActivated: backend.nudgeCrop(-.01,0) }
     Shortcut { sequence: "Right"; enabled: viewMode===1&&!backend.busy; onActivated: backend.nudgeCrop(.01,0) }
