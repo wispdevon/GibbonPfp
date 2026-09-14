@@ -84,10 +84,23 @@ endif()
 # Qt deployment normally selects only the desktop platform plugin. GUI smoke
 # tests also need offscreen, even though the CLI itself uses QCoreApplication.
 install(FILES "$<TARGET_FILE:Qt6::QOffscreenIntegrationPlugin>" DESTINATION ${OFFSCREEN_DEST})
+if(APPLE)
+  # Installation removes build-tree rpaths before macdeployqt runs. Stage the
+  # pinned native runtime first so its @rpath dependencies remain resolvable.
+  if(DEFINED VCPKG_INSTALLED_DIR)
+    install(DIRECTORY "${VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/lib/"
+      DESTINATION gibbonpfp.app/Contents/Frameworks FILES_MATCHING PATTERN "*.dylib")
+  endif()
+  if(GIBBON_BUNDLED_ORT)
+    install(DIRECTORY "${ort_SOURCE_DIR}/lib/"
+      DESTINATION gibbonpfp.app/Contents/Frameworks FILES_MATCHING PATTERN "*.dylib")
+  endif()
+endif()
 if(UNIX AND NOT APPLE)
   # Also deploy native image libraries when Qt comes from a system prefix.
   set(DEPLOY_EXTRA
-    POST_INCLUDE_REGEXES ".*/lib(Qt6|opencv|raw|heif|de265|webp|tiff).*"
+    PRE_EXCLUDE_REGEXES "^libc[.]so.*" "^libm[.]so.*" "^libpthread[.]so.*" "^libdl[.]so.*" "^librt[.]so.*" "^libutil[.]so.*" "^libresolv[.]so.*" "^libnss_.*" "^ld-linux.*"
+    POST_INCLUDE_REGEXES ".*/libQt6.*" ".*/libopencv.*" ".*/libraw.*" ".*/libheif.*" ".*/libde265.*" ".*/libwebp.*" ".*/libtiff.*"
     POST_EXCLUDE_REGEXES "^/usr/lib/" "^/lib/")
 endif()
 qt_generate_deploy_qml_app_script(TARGET gibbonpfp OUTPUT_SCRIPT deploy_script NO_UNSUPPORTED_PLATFORM_ERROR ${DEPLOY_EXTRA})

@@ -23,6 +23,8 @@ with tempfile.TemporaryDirectory(prefix='gibbon-relocated-') as temp:
     shutil.copytree(root, target, symlinks=True)
     exe = target / relative
     if sys.platform.startswith('linux'):
+        from prune_linux_runtime import GLIBC
+        assert not [p for p in target.rglob('*') if GLIBC.fullmatch(p.name)], 'Distribution must use host glibc'
         links = subprocess.check_output(['ldd', str(exe)], env=env, text=True)
         assert 'not found' not in links, links
         assert '/vcpkg_installed/' not in links and '/build-release/' not in links and '/Qt/' not in links, links

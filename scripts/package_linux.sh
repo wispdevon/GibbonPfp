@@ -3,6 +3,7 @@ set -euo pipefail
 build_dir="${1:-build-release}"
 stage_dir="$PWD/dist/AppDir"
 cmake --install "$build_dir" --prefix "$stage_dir/usr"
+python3 scripts/prune_linux_runtime.py "$stage_dir/usr"
 cp assets/gibbonpfp.desktop "$stage_dir/"
 cp assets/gibbonpfp.svg "$stage_dir/"
 mkdir -p dist/tools

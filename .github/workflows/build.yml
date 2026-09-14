@@ -79,7 +79,9 @@ jobs:
         run: scripts/sign_windows.ps1 -Executable build-release/gibbonpfp.exe
       - name: Install portable distribution
         shell: bash
-        run: cmake --install build-release --prefix "$PWD/dist/portable"
+        run: |
+          cmake --install build-release --prefix "$PWD/dist/portable"
+          if [[ "$RUNNER_OS" == "Linux" ]]; then python scripts/prune_linux_runtime.py dist/portable; fi
       - name: Include dependency licenses
         shell: bash
         run: |
