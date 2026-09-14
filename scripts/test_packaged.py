@@ -30,7 +30,7 @@ with tempfile.TemporaryDirectory(prefix='gibbon-relocated-') as temp:
     if sys.platform == 'win32' and shutil.which('dumpbin'):
         import re
         available = {p.name.lower() for p in exe.parent.glob('*.dll')}
-        available.update(p.name.lower() for p in (pathlib.Path(env['SystemRoot']) / 'System32').glob('*.dll'))
+        available.update(p.name.lower() for p in (pathlib.Path(os.environ['SystemRoot']) / 'System32').glob('*.dll'))
         missing = set()
         for binary in [exe, *exe.parent.glob('*.dll')]:
             imports = subprocess.check_output(['dumpbin', '/DEPENDENTS', str(binary)], text=True)
