@@ -152,7 +152,16 @@ std::vector<cv::Rect> Models::faces(const cv::Mat &rgb) {
     // YuNet 2023: fixed 640x640, BGR 0..255, outputs cls/obj/bbox/kps at strides 8,16,32.
     cv::Mat bgr;
     cv::cvtColor(rgb, bgr, cv::COLOR_RGB2BGR);
-    auto outputs = run("face", bgr, 640, {0, 0, 0}, {255, 255, 255});
+    // Preserve face proportions for landscape and portrait camera originals.
+    const float scale = 640.f / std::max(rgb.cols, rgb.rows);
+    cv::Mat resized;
+    cv::resize(bgr, resized,
+               {std::max(1, int(std::round(rgb.cols * scale))),
+                std::max(1, int(std::round(rgb.rows * scale)))},
+               0, 0, cv::INTER_AREA);
+    cv::Mat padded(640, 640, CV_32FC3, cv::Scalar(0, 0, 0));
+    resized.copyTo(padded(cv::Rect(0, 0, resized.cols, resized.rows)));
+    auto outputs = run("face", padded, 640, {0, 0, 0}, {255, 255, 255});
     auto &s = session("face");
     Ort::AllocatorWithDefaultOptions allocator;
     std::map<std::string, const float *> out;
@@ -175,9 +184,8 @@ std::vector<cv::Rect> Models::faces(const cv::Mat &rgb) {
                 continue;
             float cx = (i % cols + box[4 * i]) * stride, cy = (i / cols + box[4 * i + 1]) * stride;
             float w = std::exp(box[4 * i + 2]) * stride, h = std::exp(box[4 * i + 3]) * stride;
-            candidates.push_back({{(cx - w / 2) * rgb.cols / 640, (cy - h / 2) * rgb.rows / 640,
-                                   w * rgb.cols / 640, h * rgb.rows / 640},
-                                  score});
+            candidates.push_back(
+                {{(cx - w / 2) / scale, (cy - h / 2) / scale, w / scale, h / scale}, score});
         }
     }
     std::sort(candidates.begin(), candidates.end(),

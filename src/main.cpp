@@ -67,6 +67,12 @@ int main(int argc, char **argv) {
                             QString::fromLocal8Bit(argv[1]) == "models" ||
                             QString::fromLocal8Bit(argv[1]).startsWith("--help") ||
                             QString::fromLocal8Bit(argv[1]) == "--version");
+    // The workspace owns its theme. Avoid loading third-party Linux Qt theme
+    // plugins built against a different Qt, especially in portable packages.
+#ifdef Q_OS_LINUX
+    if (!cli)
+        qputenv("QT_QPA_PLATFORMTHEME", "generic");
+#endif
     std::unique_ptr<QCoreApplication> application;
     if (cli)
         application = std::make_unique<QCoreApplication>(argc, argv);

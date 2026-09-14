@@ -325,8 +325,8 @@ Result Engine::process(const QString &path, const Settings &s, std::atomic_bool 
               double(region.width()) / source.width(), double(region.height()) / source.height()};
     r.brightness = s.brightness;
     if (!s.reference.isEmpty()) {
-        auto ref =
-            decode(s.reference, s).scaled(960, 960, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+        auto ref = decode(s.reference, Settings{})
+                       .scaled(960, 960, Qt::KeepAspectRatio, Qt::SmoothTransformation);
         auto refRgb = rgbMat(ref);
         auto refFaces = models.faces(refRgb);
         if (faces.size() != 1 || refFaces.size() != 1)
