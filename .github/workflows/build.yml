@@ -1,0 +1,125 @@
+name: Build and package
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  desktop:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {os: ubuntu-24.04, name: linux-x64, triplet: x64-linux-dynamic}
+          - {os: windows-2022, name: windows-x64, triplet: x64-windows}
+          - {os: macos-15-intel, name: macos-x64, triplet: x64-osx-dynamic}
+          - {os: macos-15, name: macos-arm64, triplet: arm64-osx-dynamic}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 90
+    env:
+      VCPKG_BINARY_SOURCES: clear;files,${{ github.workspace }}/.cache/vcpkg,readwrite
+      QT_QPA_PLATFORM: offscreen
+      QT_QUICK_BACKEND: software
+      MACOSX_DEPLOYMENT_TARGET: '14.0'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: jurplel/install-qt-action@v4
+        with:
+          version: '6.8.3'
+          cache: true
+      - uses: ilammy/msvc-dev-cmd@v1
+        if: runner.os == 'Windows'
+      - name: Linux build dependencies
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y ninja-build libgl1-mesa-dev libxkbcommon-dev libxkbcommon-x11-0 libxcb-cursor0 libxcb-icccm4 libxcb-keysyms1 libxcb-shape0 libxcb-xinerama0 libxcb-randr0 libxcb-render-util0 libxcb-image0 libxcb-xfixes0 libxcb-sync1 libxcb-xkb1 libx11-xcb1 libfuse2
+      - uses: actions/cache@v4
+        with:
+          path: .cache/vcpkg
+          key: vcpkg-${{ matrix.name }}-${{ hashFiles('vcpkg.json', 'cmake/triplets/*') }}
+      - name: Set up pinned dependencies
+        shell: bash
+        run: |
+          git clone https://github.com/microsoft/vcpkg.git .cache/vcpkg-tool
+          git -C .cache/vcpkg-tool checkout a1cae005c39be7b18ba319fced856b68d7276271
+          if [[ "$RUNNER_OS" == "Windows" ]]; then .cache/vcpkg-tool/bootstrap-vcpkg.bat -disableMetrics; else .cache/vcpkg-tool/bootstrap-vcpkg.sh -disableMetrics; fi
+          echo "VCPKG_ROOT=$GITHUB_WORKSPACE/.cache/vcpkg-tool" >> "$GITHUB_ENV"
+          python scripts/fetch_assets.py
+      - name: Configure
+        shell: bash
+        run: cmake --preset vcpkg -DGIBBON_BUNDLED_ORT=ON -DVCPKG_TARGET_TRIPLET=${{ matrix.triplet }} -DVCPKG_OVERLAY_TRIPLETS="$PWD/cmake/triplets"
+      - name: Build
+        run: cmake --build build-release --parallel 3
+      - name: Test
+        shell: bash
+        run: |
+          ctest --test-dir build-release --output-on-failure
+          if [[ "$RUNNER_OS" == "macOS" ]]; then exe=build-release/gibbonpfp.app/Contents/MacOS/gibbonpfp; elif [[ "$RUNNER_OS" == "Windows" ]]; then exe=build-release/gibbonpfp.exe; else exe=build-release/gibbonpfp; fi
+          python scripts/test_cli.py "$exe"
+          "$exe" --smoke-test
+      - name: Sign Windows executable when configured
+        if: runner.os == 'Windows'
+        shell: pwsh
+        env:
+          WINDOWS_CERTIFICATE_BASE64: ${{ secrets.WINDOWS_CERTIFICATE_BASE64 }}
+          WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
+        run: scripts/sign_windows.ps1 -Executable build-release/gibbonpfp.exe
+      - name: Install portable distribution
+        run: cmake --install build-release --prefix dist/portable
+      - name: Include dependency licenses
+        shell: bash
+        run: |
+          python scripts/collect_licenses.py build-release/vcpkg_installed/${{ matrix.triplet }}/share dist/portable/licenses
+      - name: Windows packages
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          cd build-release
+          cpack -G ZIP
+          cpack -G NSIS
+          cp GibbonPfp-*.zip GibbonPfp-*.exe ../dist/
+      - name: macOS package
+        if: runner.os == 'macOS'
+        shell: bash
+        env:
+          APPLE_CERTIFICATE_BASE64: ${{ secrets.APPLE_CERTIFICATE_BASE64 }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          bash scripts/sign_macos.sh dist/portable/gibbonpfp.app
+          dist/portable/gibbonpfp.app/Contents/MacOS/gibbonpfp --version
+          dist/portable/gibbonpfp.app/Contents/MacOS/gibbonpfp --smoke-test
+          hdiutil create -volname GibbonPfp -srcfolder dist/portable -ov -format UDZO dist/GibbonPfp-0.1.0-${{ matrix.name }}.dmg
+          if [[ -n "$APPLE_CERTIFICATE_BASE64" ]]; then
+            xcrun notarytool submit dist/GibbonPfp-0.1.0-${{ matrix.name }}.dmg --apple-id "$APPLE_ID" --password "$APPLE_APP_PASSWORD" --team-id "$APPLE_TEAM_ID" --wait
+            xcrun stapler staple dist/GibbonPfp-0.1.0-${{ matrix.name }}.dmg
+          fi
+      - name: Linux AppImage
+        if: runner.os == 'Linux'
+        run: bash scripts/package_linux.sh build-release
+      - name: Packaged CLI verification
+        if: runner.os != 'macOS'
+        shell: bash
+        env:
+          GIBBON_DISABLE_SOURCE_MODELS: '1'
+        run: |
+          if [[ "$RUNNER_OS" == "Windows" ]]; then exe=dist/portable/bin/gibbonpfp.exe; else exe=dist/portable/bin/gibbonpfp; fi
+          python scripts/test_cli.py "$exe"
+          "$exe" --smoke-test
+      - uses: actions/upload-artifact@v4
+        with:
+          name: GibbonPfp-${{ matrix.name }}
+          path: |
+            dist/*.AppImage
+            dist/*.zip
+            dist/*.exe
+            dist/*.dmg
+          if-no-files-found: error

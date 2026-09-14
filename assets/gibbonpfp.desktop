@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=GibbonPfp
+Comment=Offline portrait preparation and batch resizing
+Exec=gibbonpfp %F
+Icon=gibbonpfp
+Terminal=false
+Categories=Graphics;Photography;Qt;
+MimeType=image/jpeg;image/png;image/webp;image/tiff;image/heic;

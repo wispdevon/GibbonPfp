@@ -1,0 +1,10 @@
+{
+  "version": 6,
+  "configurePresets": [
+    {"name":"dev","generator":"Ninja","binaryDir":"${sourceDir}/build","cacheVariables":{"CMAKE_BUILD_TYPE":"Debug","BUILD_TESTING":"ON"}},
+    {"name":"release","inherits":"dev","binaryDir":"${sourceDir}/build-release","cacheVariables":{"CMAKE_BUILD_TYPE":"Release"}},
+    {"name":"vcpkg","inherits":"release","cacheVariables":{"CMAKE_TOOLCHAIN_FILE":"$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake"}}
+  ],
+  "buildPresets":[{"name":"dev","configurePreset":"dev"},{"name":"release","configurePreset":"release"},{"name":"vcpkg","configurePreset":"vcpkg"}],
+  "testPresets":[{"name":"dev","configurePreset":"dev","output":{"outputOnFailure":true}},{"name":"release","configurePreset":"release","output":{"outputOnFailure":true}}]
+}

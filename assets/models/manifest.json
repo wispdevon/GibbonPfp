@@ -1,0 +1,26 @@
+{
+  "version": 1,
+  "models": [
+    {
+      "id": "face",
+      "file": "face_detection_yunet_2023mar.onnx",
+      "url": "https://media.githubusercontent.com/media/opencv/opencv_zoo/47534e27c9851bb1128ccc0102f1145e27f23f98/models/face_detection_yunet/face_detection_yunet_2023mar.onnx",
+      "sha256": "8f2383e4dd3cfbb4553ea8718107fc0423210dc964f9f4280604804ed2552fa4",
+      "bytes": 232589
+    },
+    {
+      "id": "fast",
+      "file": "human_segmentation_pphumanseg_2023mar.onnx",
+      "url": "https://media.githubusercontent.com/media/opencv/opencv_zoo/47534e27c9851bb1128ccc0102f1145e27f23f98/models/human_segmentation_pphumanseg/human_segmentation_pphumanseg_2023mar.onnx",
+      "sha256": "552d8a984054e59b5d773d24b9b12022b22046ceb2bbc4c9aaeaceb36a9ddf24",
+      "bytes": 6163938
+    },
+    {
+      "id": "quality",
+      "file": "BiRefNet-portrait-epoch_150.onnx",
+      "url": "https://github.com/danielgatis/rembg/releases/download/v0.0.0/BiRefNet-portrait-epoch_150.onnx",
+      "sha256": "1ba1c8ff5a7bbfadc8d8d13fb11d7be793f91f23d9d466549e37a854f6668f99",
+      "bytes": 972666916
+    }
+  ]
+}
