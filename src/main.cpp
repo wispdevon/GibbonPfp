@@ -253,7 +253,11 @@ int main(int argc, char **argv) {
             });
             smoke.start(500);
         }
-        return app.exec();
+        const int exitCode = app.exec();
+        // Destroy bindings while their controller still exists. The image
+        // provider stays alive until the controller has joined its worker.
+        qDeleteAll(qml.rootObjects());
+        return exitCode;
     } catch (const std::exception &e) {
         QTextStream(stderr) << "GibbonPfp: " << errorText(e) << Qt::endl;
         return 1;

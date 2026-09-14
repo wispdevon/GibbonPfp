@@ -32,6 +32,9 @@ def main():
         run('--version')
         raw = pathlib.Path(__file__).resolve().parents[1] / 'tests/fixtures/synthetic.dng'
         run('process', raw, '--output', root / 'raw', '--no-auto-crop', '--white-balance', 'custom', '--temperature', '5500', '--tint', '1.05', '--highlight', '3')
+        heic = raw.with_name('synthetic.heic')
+        run('process', heic, '--output', root / 'heic', '--no-auto-crop', '--format', 'png')
+        assert struct.unpack('!II', next((root / 'heic').glob('*.png')).read_bytes()[16:24]) == (120, 160)
         models = json.loads(run('models', 'list'))
         assert {m['id'] for m in models} == {'face', 'fast', 'quality'}
         report = root / 'report.json'
@@ -55,7 +58,7 @@ def main():
             big = root / (name + '.png')
             png(big, w, h)
             run('process', big, '--output', root / 'large', '--no-auto-crop')
-    print('CLI integration: review gates, Unicode paths, sizing, collisions, failures, 16MP/24MP passed')
+    print('CLI integration: RAW/HEIC, review gates, Unicode paths, sizing, collisions, failures, 16MP/24MP passed')
 
 if __name__ == '__main__':
     main()
