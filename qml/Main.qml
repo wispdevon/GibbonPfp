@@ -44,14 +44,14 @@ ApplicationWindow {
         background: Rectangle { radius: 8; color: action.primary ? accent : action.down ? strong : action.hovered ? strong : panel; border.color: action.activeFocus ? accent : line; border.width: action.activeFocus ? 2 : 1; opacity: action.enabled ? 1 : .6 }
     }
     component Caption: Label { color: muted; font.pixelSize: 11; font.letterSpacing: 1.8; font.weight: Font.DemiBold }
-    component FieldLabel: Label { color: ink; font.pixelSize: 12; wrapMode: Text.WordWrap }
+    component FieldLabel: Label { Layout.fillWidth: true; color: ink; font.pixelSize: 12; wrapMode: Text.WordWrap }
     component Rule: Rectangle { Layout.fillWidth: true; height: 1; color: line }
     component Entry: TextField { implicitHeight: 38; color: ink; selectByMouse: true; font.pixelSize: 12; background: Rectangle { color: panel; radius: 8; border.color: parent.activeFocus ? accent : line } }
     component Choice: ComboBox { implicitHeight: 38; font.pixelSize: 12; palette.button: panel; palette.text: ink; palette.buttonText: ink; background: Rectangle { color: panel; radius: 8; border.color: parent.activeFocus ? accent : line } }
 
     Canvas {
         anchors.fill: parent
-        onPaint: { let c = getContext("2d"); c.clearRect(0,0,width,height); c.fillStyle = backend.dark ? "#ffffff12" : "#17181b14"; for(let y=9;y<height;y+=18) for(let x=9;x<width;x+=18) {c.beginPath();c.arc(x,y,.8,0,Math.PI*2);c.fill();} }
+        onPaint: { let c = getContext("2d"); c.clearRect(0,0,width,height); c.fillStyle = backend.dark ? "rgba(242,240,234,0.08)" : "rgba(23,24,27,0.09)"; for(let y=9;y<height;y+=18) for(let x=9;x<width;x+=18) {c.beginPath();c.arc(x,y,.8,0,Math.PI*2);c.fill();} }
         Connections { target: backend; function onChanged() { parent.requestPaint() } }
     }
     ColumnLayout {
@@ -195,14 +195,16 @@ ApplicationWindow {
             Rectangle {
                 Layout.preferredWidth: win.width<1200 ? 260 : 300; Layout.fillHeight: true; radius: 12; color: panel; border.color: line
                 ScrollView {
+                    id: adjustmentsScroll
                     anchors.fill: parent; anchors.margins: 16; clip: true; contentWidth: availableWidth
+                    ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
                     ColumnLayout {
-                        width: parent.width; spacing: 13; enabled: hasPhoto&&!backend.busy
+                        width: adjustmentsScroll.availableWidth; spacing: 13; enabled: hasPhoto&&!backend.busy
                         Caption { text: "01 / FRAME" }
                         CheckBox { text: "Automatic portrait crop"; checked: backend.settings.autoCrop; onClicked: {backend.set("autoCrop",checked);backend.set("crop",[0,0,0,0]);backend.preview()} }
                         RowLayout { Layout.fillWidth: true; FieldLabel { text: "Headroom" } Item {Layout.fillWidth: true} Label { text: Math.round(backend.settings.headroom*100)+"%"; color: muted; font.family: "Geist Mono"; font.pixelSize: 11 } }
                         Slider { Layout.fillWidth: true; from: 0; to: .25; stepSize: .01; value: backend.settings.headroom; Accessible.name: "Headroom"; onMoved: backend.set("headroom",value); onPressedChanged: if(!pressed){backend.set("crop",[0,0,0,0]);backend.preview()} }
-                        FieldLabel { text: "Crop zoom · drag frame in Crop view" }
+                        FieldLabel { text: "Crop zoom · drag or use arrow keys in Crop view" }
                         Slider { Layout.fillWidth: true; from: 1; to: 4; value: 1; Accessible.name: "Crop zoom"; onPressedChanged: if(!pressed&&backend.result.sourceWidth){let r=backend.result;let h=Math.min(r.sourceHeight,r.sourceWidth/0.75)/value;let w=h*.75;let nw=w/r.sourceWidth;let nh=h/r.sourceHeight;backend.setCrop(Math.max(0,Math.min(1-nw,r.cropX+r.cropW/2-nw/2)),Math.max(0,Math.min(1-nh,r.cropY+r.cropH/2-nh/2)),nw,nh);viewMode=1} }
                         RowLayout { Layout.fillWidth: true
                             Action { text: "Rotate ↶"; Layout.fillWidth: true; onClicked: {backend.set("rotation",backend.settings.rotation-90);backend.set("crop",[0,0,0,0]);backend.preview()} }
@@ -220,7 +222,7 @@ ApplicationWindow {
                         FieldLabel { visible: backend.settings.background!=="off"; text: "Edge feather · output pixels" }
                         Slider { visible: backend.settings.background!=="off"; Layout.fillWidth: true; from: 0; to: 10; stepSize: .5; value: backend.settings.feather; Accessible.name: "Mask feather"; onMoved: backend.set("feather",value); onPressedChanged: if(!pressed)backend.preview() }
                         Disclosure { text: "RAW development"; Layout.fillWidth: true
-                            content: ColumnLayout { width: parent.width; spacing: 10
+                            content: ColumnLayout { Layout.fillWidth: true; spacing: 10
                                 FieldLabel { text: "White balance" }
                                 Choice { Layout.fillWidth: true; model: ["Camera", "Daylight", "Cloudy", "Tungsten", "Custom"]; currentIndex: ["camera","daylight","cloudy","tungsten","custom"].indexOf(backend.settings.whiteBalance); onActivated: {backend.set("whiteBalance",currentText.toLowerCase());backend.preview()} }
                                 FieldLabel { text: "Temperature · "+backend.settings.temperature+" K" }
@@ -290,4 +292,8 @@ ApplicationWindow {
     Shortcut { sequence: StandardKey.Open; onActivated: photos.open() }
     Shortcut { sequence: StandardKey.Undo; onActivated: backend.undo() }
     Shortcut { sequence: "Ctrl+Return"; onActivated: backend.preview() }
+    Shortcut { sequence: "Left"; enabled: viewMode===1&&!backend.busy; onActivated: backend.nudgeCrop(-.01,0) }
+    Shortcut { sequence: "Right"; enabled: viewMode===1&&!backend.busy; onActivated: backend.nudgeCrop(.01,0) }
+    Shortcut { sequence: "Up"; enabled: viewMode===1&&!backend.busy; onActivated: backend.nudgeCrop(0,-.01) }
+    Shortcut { sequence: "Down"; enabled: viewMode===1&&!backend.busy; onActivated: backend.nudgeCrop(0,.01) }
 }

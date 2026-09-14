@@ -43,7 +43,7 @@ Only face detection and Fast model weights are copied into packages. Run
 ## Packaging
 
 ```bash
-cmake --install build-release --prefix dist/portable
+cmake --install build-release --prefix "$PWD/dist/portable"
 # Linux:
 bash scripts/package_linux.sh build-release
 # Windows (from build-release):

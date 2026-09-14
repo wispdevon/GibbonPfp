@@ -1,4 +1,5 @@
 #include "controller.h"
+#include <QCryptographicHash>
 #include <QDateTime>
 #include <QDir>
 #include <QFile>
@@ -12,6 +13,11 @@
 #include <QtConcurrent>
 
 using namespace gibbon;
+static QString thumbnailKey(const QString &path) {
+    return "thumb" +
+           QString::fromLatin1(
+               QCryptographicHash::hash(path.toUtf8(), QCryptographicHash::Sha256).toHex());
+}
 QImage ImageStore::requestImage(const QString &id, QSize *size, const QSize &requested) {
     QMutexLocker lock(&mutex);
     auto image = images.value(id.section('?', 0, 0));
@@ -45,13 +51,14 @@ QVariantList Controller::items() const {
     QVariantList list;
     for (int i = 0; i < queue.size(); ++i) {
         auto &q = queue[i];
-        list << QVariantMap{{"name", QFileInfo(q.path).fileName()},
-                            {"path", q.path},
-                            {"state", q.state},
-                            {"selected", q.selected},
-                            {"error", q.error},
-                            {"warnings", q.warnings},
-                            {"thumb", QString("image://photos/thumb%1?%2").arg(i).arg(generation)}};
+        list << QVariantMap{
+            {"name", QFileInfo(q.path).fileName()},
+            {"path", q.path},
+            {"state", q.state},
+            {"selected", q.selected},
+            {"error", q.error},
+            {"warnings", q.warnings},
+            {"thumb", QString("image://photos/%1?%2").arg(thumbnailKey(q.path)).arg(generation)}};
     }
     return list;
 }
@@ -105,6 +112,8 @@ void Controller::set(const QString &key, const QVariant &value) {
         auto j = queue[index].settings.json();
         j[key] = QJsonValue::fromVariant(value);
         auto s = Settings::fromJson(j);
+        if (QStringList{"crop", "rotation", "autoCrop", "headroom"}.contains(key))
+            s.strokes = {};
         remember();
         s.approved = false;
         queue[index].settings = s;
@@ -116,6 +125,13 @@ void Controller::set(const QString &key, const QVariant &value) {
 void Controller::setCrop(double x, double y, double w, double h) {
     set("crop", QVariantList{x, y, w, h});
     preview();
+}
+void Controller::nudgeCrop(double dx, double dy) {
+    if (working || index < 0 || details.isEmpty())
+        return;
+    auto w = details["cropW"].toDouble(), h = details["cropH"].toDouble();
+    setCrop(std::clamp(details["cropX"].toDouble() + dx, 0., 1. - w),
+            std::clamp(details["cropY"].toDouble() + dy, 0., 1. - h), w, h);
 }
 void Controller::setSize(int width, int height) {
     if (working || index < 0)
@@ -211,7 +227,7 @@ void Controller::showResult(const Result &r, int row) {
     q.warnings = r.warnings;
     q.error.clear();
     q.state = r.review ? "Needs review" : "Ready";
-    images->put(QString("thumb%1").arg(row),
+    images->put(thumbnailKey(q.path),
                 r.preview.scaled(96, 128, Qt::KeepAspectRatio, Qt::SmoothTransformation));
     if (row == index) {
         images->put("source", r.source);
@@ -228,7 +244,7 @@ void Controller::showResult(const Result &r, int row) {
                    {"cropH", r.crop.height()},
                    {"review", r.review},
                    {"warnings", r.warnings.join(" · ")},
-                   {"bytes", r.encoded.size()},
+                   {"bytes", r.encodedBytes},
                    {"brightness", r.brightness}};
     }
     ++generation;

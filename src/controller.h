@@ -78,6 +78,7 @@ class Controller : public QObject {
     Q_INVOKABLE QString modelDescription() const;
     Q_INVOKABLE void installModel(const QString &id);
     Q_INVOKABLE void setCrop(double x, double y, double width, double height);
+    Q_INVOKABLE void nudgeCrop(double dx, double dy);
     Q_INVOKABLE void stroke(const QVariantList &points, bool keep, double radius);
   signals:
     void changed();

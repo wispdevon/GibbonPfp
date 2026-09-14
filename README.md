@@ -65,7 +65,7 @@ installed application; Python is used only by development scripts.
 
 The Output view displays the decoded export bytes. Original and Crop views show
 the developed source. Mask brushes operate on the current crop; changing framing
-requires revisiting the mask. Brightness and RAW controls take effect after the
+clears the strokes. Brightness and RAW controls take effect after the
 slider is released. **Refresh preview** explicitly recomputes the current settings.
 
 ## Commands

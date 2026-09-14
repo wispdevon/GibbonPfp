@@ -8,6 +8,7 @@ namespace gibbon {
 struct Result {
     QImage source, preview, mask;
     QByteArray encoded;
+    qint64 encodedBytes = 0;
     QRectF crop;
     QStringList warnings;
     bool review = false;

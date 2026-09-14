@@ -46,21 +46,21 @@ QImage Engine::decode(const QString &path, const Settings &s) {
     if (!supportedPath(path))
         throw std::runtime_error("Unsupported image format");
     if (rawPath(path)) {
-        LibRaw raw;
-        raw.imgdata.params.use_camera_wb = 1;
-        raw.imgdata.params.no_auto_bright = 1;
-        raw.imgdata.params.output_bps = 16;
-        raw.imgdata.params.output_color = 1;
-        raw.imgdata.params.highlight = s.highlight;
-        raw.imgdata.params.gamm[0] = 1 / 2.4;
-        raw.imgdata.params.gamm[1] = 12.92;
+        auto raw = std::make_unique<LibRaw>();
+        raw->imgdata.params.use_camera_wb = 1;
+        raw->imgdata.params.no_auto_bright = 1;
+        raw->imgdata.params.output_bps = 16;
+        raw->imgdata.params.output_color = 1;
+        raw->imgdata.params.highlight = s.highlight;
+        raw->imgdata.params.gamm[0] = 1 / 2.4;
+        raw->imgdata.params.gamm[1] = 12.92;
 #ifdef _WIN32
-        int err = raw.open_file(path.toStdWString().c_str());
+        int err = raw->open_file(path.toStdWString().c_str());
 #else
-        int err = raw.open_file(path.toUtf8().constData());
+        int err = raw->open_file(path.toUtf8().constData());
 #endif
         if (err == LIBRAW_SUCCESS)
-            err = raw.unpack();
+            err = raw->unpack();
         if (err == LIBRAW_SUCCESS && s.whiteBalance != "camera") {
             int t = s.whiteBalance == "daylight"   ? 5500
                     : s.whiteBalance == "cloudy"   ? 6500
@@ -69,19 +69,19 @@ QImage Engine::decode(const QString &path, const Settings &s) {
             auto white = kelvin(t), base = kelvin(6500);
             for (int i = 0; i < 4; ++i) {
                 int c = i == 3 ? 1 : i;
-                double neutral = raw.imgdata.color.pre_mul[i] > 0 ? raw.imgdata.color.pre_mul[i]
-                                                                  : raw.imgdata.color.pre_mul[c];
-                raw.imgdata.params.user_mul[i] =
+                double neutral = raw->imgdata.color.pre_mul[i] > 0 ? raw->imgdata.color.pre_mul[i]
+                                                                   : raw->imgdata.color.pre_mul[c];
+                raw->imgdata.params.user_mul[i] =
                     float(neutral * base[c] / white[c] * (c == 1 ? s.tint : 1));
             }
-            raw.imgdata.params.use_camera_wb = 0;
+            raw->imgdata.params.use_camera_wb = 0;
         }
         if (err == LIBRAW_SUCCESS)
-            err = raw.dcraw_process();
+            err = raw->dcraw_process();
         if (err != LIBRAW_SUCCESS)
             throw std::runtime_error(
                 (QString("RAW decode failed: ") + libraw_strerror(err)).toStdString());
-        auto *data = raw.dcraw_make_mem_image(&err);
+        auto *data = raw->dcraw_make_mem_image(&err);
         if (!data || err != LIBRAW_SUCCESS || data->type != LIBRAW_IMAGE_BITMAP ||
             data->colors != 3 || data->bits != 16) {
             if (data)
@@ -314,7 +314,7 @@ Result Engine::process(const QString &path, const Settings &s, std::atomic_bool 
     }
     // Normalize manual crops to exact 3:4 by shrinking about their center.
     double w = crop.width() * source.width(), h = crop.height() * source.height();
-    int units = int(std::min(w / 3, h / 4));
+    int units = std::min({int(std::min(w / 3, h / 4)), source.width() / 3, source.height() / 4});
     if (units < 1)
         throw std::runtime_error("Crop is too small");
     QRect region(int(crop.center().x() * source.width() - units * 1.5),
@@ -414,6 +414,7 @@ Result Engine::process(const QString &path, const Settings &s, std::atomic_bool 
     if (!writer.write(output))
         throw std::runtime_error(writer.errorString().toStdString());
     r.preview = QImage::fromData(r.encoded);
+    r.encodedBytes = r.encoded.size();
     r.mask = maskImage.scaled(1200, 1200, Qt::KeepAspectRatio, Qt::SmoothTransformation);
     return r;
 }

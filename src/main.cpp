@@ -7,6 +7,7 @@
 #include <QJsonDocument>
 #include <QQmlApplicationEngine>
 #include <QQmlContext>
+#include <QQuickStyle>
 #include <QQuickWindow>
 #include <QSaveFile>
 #include <QTextStream>
@@ -65,9 +66,12 @@ int main(int argc, char **argv) {
                             QString::fromLocal8Bit(argv[1]) == "models" ||
                             QString::fromLocal8Bit(argv[1]).startsWith("--help") ||
                             QString::fromLocal8Bit(argv[1]) == "--version");
+    std::unique_ptr<QCoreApplication> application;
     if (cli)
-        qputenv("QT_QPA_PLATFORM", "offscreen");
-    QGuiApplication app(argc, argv);
+        application = std::make_unique<QCoreApplication>(argc, argv);
+    else
+        application = std::make_unique<QGuiApplication>(argc, argv);
+    auto &app = *application;
     app.setApplicationName("GibbonPfp");
     app.setOrganizationName("Devon Labs");
     app.setApplicationVersion("0.1.0");
@@ -208,7 +212,8 @@ int main(int argc, char **argv) {
         QFontDatabase::addApplicationFont(":/assets/fonts/Inter.ttf");
         QFontDatabase::addApplicationFont(":/assets/fonts/SpaceGrotesk.ttf");
         QFontDatabase::addApplicationFont(":/assets/fonts/GeistMono.ttf");
-        app.setFont(QFont("Inter", 10));
+        QGuiApplication::setFont(QFont("Inter", 10));
+        QQuickStyle::setStyle("Fusion");
         QQmlApplicationEngine qml;
         auto *store = new ImageStore;
         qml.addImageProvider("photos", store);

@@ -38,7 +38,8 @@ jobs:
       - name: Linux build dependencies
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y ninja-build libgl1-mesa-dev libxkbcommon-dev libxkbcommon-x11-0 libxcb-cursor0 libxcb-icccm4 libxcb-keysyms1 libxcb-shape0 libxcb-xinerama0 libxcb-randr0 libxcb-render-util0 libxcb-image0 libxcb-xfixes0 libxcb-sync1 libxcb-xkb1 libx11-xcb1 libfuse2
-      - uses: actions/cache@v4
+      - uses: actions/cache/restore@v4
+        id: dependency-cache
         with:
           path: .cache/vcpkg
           key: vcpkg-${{ matrix.name }}-${{ hashFiles('vcpkg.json', 'cmake/triplets/*') }}
@@ -53,6 +54,12 @@ jobs:
       - name: Configure
         shell: bash
         run: cmake --preset vcpkg -DGIBBON_BUNDLED_ORT=ON -DVCPKG_TARGET_TRIPLET=${{ matrix.triplet }} -DVCPKG_OVERLAY_TRIPLETS="$PWD/cmake/triplets"
+      - name: Save compiled dependencies
+        if: always() && steps.dependency-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: .cache/vcpkg
+          key: vcpkg-${{ matrix.name }}-${{ hashFiles('vcpkg.json', 'cmake/triplets/*') }}
       - name: Build
         run: cmake --build build-release --parallel 3
       - name: Test
@@ -70,7 +77,8 @@ jobs:
           WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
         run: scripts/sign_windows.ps1 -Executable build-release/gibbonpfp.exe
       - name: Install portable distribution
-        run: cmake --install build-release --prefix dist/portable
+        shell: bash
+        run: cmake --install build-release --prefix "$PWD/dist/portable"
       - name: Include dependency licenses
         shell: bash
         run: |

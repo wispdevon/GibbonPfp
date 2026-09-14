@@ -4,13 +4,72 @@
 #include <QFile>
 #include <QImageReader>
 #include <QTemporaryDir>
+#include <QThread>
 #include <QtTest>
 #include <random>
+#include <tiffio.h>
+#include <webp/encode.h>
 
 using namespace gibbon;
 class CoreTests : public QObject {
     Q_OBJECT
   private slots:
+    void smallWorkerStack() {
+        QTemporaryDir dir;
+        QImage image(60, 80, QImage::Format_RGB888);
+        image.fill(Qt::gray);
+        auto path = dir.filePath("thread.png");
+        QVERIFY(image.save(path));
+        QString error;
+        auto thread = std::unique_ptr<QThread>(QThread::create([&] {
+            try {
+                Settings s;
+                s.autoCrop = false;
+                Engine engine;
+                engine.process(path, s);
+            } catch (const std::exception &e) {
+                error = errorText(e);
+            }
+        }));
+        thread->setStackSize(512 * 1024);
+        thread->start();
+        QVERIFY(thread->wait(10000));
+        QVERIFY2(error.isEmpty(), qPrintable(error));
+    }
+    void independentCodecs() {
+        QTemporaryDir dir;
+        auto path = dir.filePath("gradient16.tiff");
+        auto *t = TIFFOpen(path.toUtf8().constData(), "w");
+        QVERIFY(t);
+        TIFFSetField(t, TIFFTAG_IMAGEWIDTH, 60);
+        TIFFSetField(t, TIFFTAG_IMAGELENGTH, 80);
+        TIFFSetField(t, TIFFTAG_SAMPLESPERPIXEL, 3);
+        TIFFSetField(t, TIFFTAG_BITSPERSAMPLE, 16);
+        TIFFSetField(t, TIFFTAG_PHOTOMETRIC, PHOTOMETRIC_RGB);
+        TIFFSetField(t, TIFFTAG_PLANARCONFIG, PLANARCONFIG_CONTIG);
+        TIFFSetField(t, TIFFTAG_ORIENTATION, ORIENTATION_RIGHTTOP);
+        std::vector<quint16> row(180, 12345);
+        for (int y = 0; y < 80; ++y)
+            QVERIFY(TIFFWriteScanline(t, row.data(), y) >= 0);
+        TIFFClose(t);
+        auto decoded = Engine::decode(path, Settings{});
+        QCOMPARE(decoded.size(), QSize(80, 60));
+        QVERIFY(std::abs(decoded.pixelColor(0, 0).redF() - 12345. / 65535) < .0001);
+        QImage image(60, 80, QImage::Format_RGBA8888);
+        image.fill(QColor(80, 120, 160, 90));
+        uint8_t *data = nullptr;
+        auto size = WebPEncodeLosslessRGBA(image.constBits(), image.width(), image.height(),
+                                           image.bytesPerLine(), &data);
+        QVERIFY(size > 0);
+        QFile file(dir.filePath("alpha.webp"));
+        QVERIFY(file.open(QIODevice::WriteOnly));
+        QCOMPARE(file.write(reinterpret_cast<const char *>(data), qint64(size)), qint64(size));
+        file.close();
+        WebPFree(data);
+        auto webp = Engine::decode(file.fileName(), Settings{});
+        QCOMPARE(webp.size(), image.size());
+        QCOMPARE(webp.pixelColor(0, 0).alpha(), 90);
+    }
     void settingsRoundtrip() {
         Settings s;
         s.background = "fast";
@@ -143,5 +202,5 @@ class CoreTests : public QObject {
         QCOMPARE(r.outputSize, QSize(360, 480));
     }
 };
-QTEST_MAIN(CoreTests)
+QTEST_GUILESS_MAIN(CoreTests)
 #include "core_tests.moc"

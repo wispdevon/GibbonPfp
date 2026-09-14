@@ -14,19 +14,19 @@ static QImage orient(QImage i, int o) {
     QTransform t;
     switch (o) {
     case 2:
-        return i.mirrored(true, false);
+        return i.transformed(QTransform().scale(-1, 1));
     case 3:
         t.rotate(180);
         break;
     case 4:
-        return i.mirrored(false, true);
+        return i.transformed(QTransform().scale(1, -1));
     case 5:
-        return i.mirrored(true, false).transformed(t.rotate(270));
+        return i.transformed(QTransform().scale(-1, 1)).transformed(t.rotate(270));
     case 6:
         t.rotate(90);
         break;
     case 7:
-        return i.mirrored(true, false).transformed(t.rotate(90));
+        return i.transformed(QTransform().scale(-1, 1)).transformed(t.rotate(90));
     case 8:
         t.rotate(270);
         break;
