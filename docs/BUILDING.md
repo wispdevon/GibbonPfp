@@ -45,6 +45,7 @@ Only face detection and Fast model weights are copied into packages. Run
 ```bash
 cmake --install build-release --prefix "$PWD/dist/portable"
 # Linux:
+python3 scripts/prune_linux_runtime.py dist/portable
 bash scripts/package_linux.sh build-release
 # Windows (from build-release):
 cpack -G ZIP
@@ -54,6 +55,13 @@ cpack -G NSIS
 On macOS, use `hdiutil create` as in the workflow. Qt's deployment scripts collect
 Qt/QML runtime modules. Windows packages also include app-local native DLLs.
 Test the installed executable and its models, not only the build-directory copy.
+
+`scripts/test_packaged.py dist/portable bin/gibbonpfp` copies the distribution to
+a temporary location and removes SDK search paths before checking startup, RAW,
+HEIC, crop review, batch exports, and large inputs. Use `bin/gibbonpfp.exe` on
+Windows or `gibbonpfp.app/Contents/MacOS/gibbonpfp` on macOS. Windows validation
+also checks DLL imports when MSVC's `dumpbin` is available. Linux packages use the
+host's glibc/loader pair; do not add glibc to an AppImage.
 
 Release artifacts must include font/model notices, native dependency copyright
 files, and ONNX Runtime third-party notices. The vcpkg baseline identifies the

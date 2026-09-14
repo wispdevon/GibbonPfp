@@ -65,8 +65,16 @@ static void writeReport(const QString &path, const QJsonArray &report) {
 int main(int argc, char **argv) {
     bool cli = argc > 1 && (QString::fromLocal8Bit(argv[1]) == "process" ||
                             QString::fromLocal8Bit(argv[1]) == "models" ||
+                            QString::fromLocal8Bit(argv[1]) == "-h" ||
+                            QString::fromLocal8Bit(argv[1]) == "-v" ||
                             QString::fromLocal8Bit(argv[1]).startsWith("--help") ||
                             QString::fromLocal8Bit(argv[1]) == "--version");
+#ifdef Q_OS_WIN
+    // Qt otherwise opens a help/version dialog when launched without an
+    // attached console, including automation with inherited output handles.
+    if (cli)
+        qputenv("QT_COMMAND_LINE_PARSER_NO_GUI_MESSAGE_BOXES", "1");
+#endif
     // The workspace owns its theme. Avoid loading third-party Linux Qt theme
     // plugins built against a different Qt, especially in portable packages.
 #ifdef Q_OS_LINUX

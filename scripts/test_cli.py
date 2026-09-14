@@ -30,6 +30,8 @@ def main():
             assert result.returncode == code, (args, result.returncode, result.stdout, result.stderr)
             return result.stdout
         run('--version')
+        run('-v')
+        run('-h')
         raw = pathlib.Path(__file__).resolve().parents[1] / 'tests/fixtures/synthetic.dng'
         run('process', raw, '--output', root / 'raw', '--no-auto-crop', '--white-balance', 'custom', '--temperature', '5500', '--tint', '1.05', '--highlight', '3')
         heic = raw.with_name('synthetic.heic')
