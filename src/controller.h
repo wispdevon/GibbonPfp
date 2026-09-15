@@ -1,6 +1,7 @@
 #pragma once
 #include "engine.h"
 #include <QMutex>
+#include <QLockFile>
 #include <QTimer>
 #include <QElapsedTimer>
 #include <QObject>
@@ -21,6 +22,10 @@ class ImageStore : public QQuickImageProvider {
 };
 class Controller : public QObject {
     Q_OBJECT
+    Q_PROPERTY(bool recoveryPending READ recoveryPending NOTIFY recoveryChanged)
+    Q_PROPERTY(bool recoveryRestorable READ recoveryRestorable NOTIFY recoveryChanged)
+    Q_PROPERTY(QString recoveryMessage READ recoveryMessage NOTIFY recoveryChanged)
+    Q_PROPERTY(QString autosaveError READ autosaveError NOTIFY recoveryChanged)
     Q_PROPERTY(QVariantList items READ items NOTIFY changed)
     Q_PROPERTY(QVariantMap settings READ settings NOTIFY changed)
     Q_PROPERTY(QVariantMap result READ result NOTIFY changed)
@@ -40,8 +45,13 @@ class Controller : public QObject {
         QString buttonAccent READ buttonAccent WRITE setButtonAccent NOTIFY appearanceChanged)
     Q_PROPERTY(bool dark READ dark WRITE setDark NOTIFY changed)
   public:
-    explicit Controller(ImageStore *store, QObject *parent = nullptr);
+    explicit Controller(ImageStore *store, QObject *parent = nullptr, const QString &recoveryDirectory = {}, bool enableRecovery = true);
     ~Controller() override;
+    bool recoveryPending() const { return recoveryOffered; }
+    bool recoveryRestorable() const { return !recoverySnapshot.isEmpty(); }
+    QString recoveryMessage() const { return recoveryNotice; }
+    QString autosaveError() const { return recoveryError; }
+    Q_INVOKABLE void resolveRecovery(bool restore);
     QVariantList items() const;
     QVariantMap settings() const;
     QVariantMap result() const {
@@ -117,17 +127,32 @@ class Controller : public QObject {
   signals:
     void changed();
     void progressChanged();
+    void recoveryChanged();
     void appearanceChanged();
     void highQualityConfirmationRequested();
 
   private:
     struct Item {
         QString path, state = "Imported", error;
+        QString fingerprint;
         bool selected = true;
         gibbon::Settings settings;
         QVector<gibbon::Settings> history;
         QStringList warnings;
     };
+    QString recoveryPath, recoveryNotice, recoveryError;
+    QJsonObject recoverySnapshot;
+    QByteArray lastRecovery;
+    QTimer recoveryTimer;
+    std::unique_ptr<QLockFile> recoveryLock;
+    bool recoveryOffered = false, repairRecovery = false;
+    QList<QUrl> deferredImports;
+    bool deferredRecursive = false;
+    static QString sourceFingerprint(const QString &path);
+    static QJsonObject validateRecovery(const QByteArray &bytes);
+    QJsonObject recoveryJson() const;
+    void initializeRecovery(const QString &directory);
+    void autosaveRecovery();
     quint64 operation = 0;
     QTimer progressTimer;
     QElapsedTimer progressClock;

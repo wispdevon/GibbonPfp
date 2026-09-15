@@ -418,6 +418,27 @@ selection, approvals, and strokes; **they do not embed photos**. Preserve the
 original files. Presets omit photo-specific crop geometry, strokes, approvals,
 and reference paths. Settings changes invalidate approval for the affected image.
 
+### Autosave and recovery
+
+The desktop atomically autosaves queue order, paths, per-photo settings, strokes,
+selection and active photo one second after changes, and on clean exit. Recovery
+lives in the app-local data directory under `recovery/`, separately from manual
+sessions, with `current.json` and one previous valid snapshot. It contains local
+photo paths, so treat it as private workspace metadata. Photos are never embedded.
+
+Every startup with recovery data offers **Restore / Start fresh**, including after
+normal exits. Restore loads metadata first; choose Refresh to process a preview.
+Missing photos stay listed with errors. SHA-256 source fingerprints invalidate
+approvals when original bytes change. High Quality consent, model sessions,
+processing caches and device preferences are not recovered. High Quality still
+asks before its next load.
+
+A process lock prevents another instance from writing the same recovery files.
+That instance can read recovery but displays that autosave is unavailable. A
+corrupt latest snapshot falls back to the previous valid one; if neither is valid,
+the dialog explains the failure. Write failures remain visible without discarding
+edits. Use a manually saved session when autosave is unavailable.
+
 Theme, UI scale, and accent are separate local interface preferences. They do not
 alter photo settings, presets, sessions, CLI processing, or export dimensions.
 

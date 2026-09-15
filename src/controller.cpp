@@ -36,7 +36,7 @@ void ImageStore::put(const QString &id, const QImage &i) {
     QMutexLocker lock(&mutex);
     images[id] = i;
 }
-Controller::Controller(ImageStore *store, QObject *parent) : QObject(parent), images(store) {
+Controller::Controller(ImageStore *store, QObject *parent, const QString &recoveryDirectory, bool enableRecovery) : QObject(parent), images(store) {
     progressTimer.setInterval(100);
     connect(&progressTimer, &QTimer::timeout, this, &Controller::progressChanged);
     pool.setMaxThreadCount(1);
@@ -51,10 +51,12 @@ Controller::Controller(ImageStore *store, QObject *parent) : QObject(parent), im
         QSettings()
             .value("dark", QGuiApplication::styleHints()->colorScheme() == Qt::ColorScheme::Dark)
             .toBool();
+    if (enableRecovery) initializeRecovery(recoveryDirectory);
 }
 Controller::~Controller() {
     cancelled = true;
     pool.waitForDone();
+    autosaveRecovery();
 }
 void Controller::beginProgress() {
     ++operation;
@@ -159,6 +161,7 @@ void Controller::setCurrent(int i) {
     preview();
 }
 void Controller::add(const QList<QUrl> &urls, bool recursive) {
+    if (recoveryOffered) { deferredImports.append(urls); deferredRecursive |= recursive; return; }
     if (working)
         return;
     QStringList paths;
@@ -169,8 +172,10 @@ void Controller::add(const QList<QUrl> &urls, bool recursive) {
         for (auto &q : queue)
             if (q.path == p)
                 exists = true;
-        if (!exists)
-            queue.push_back({p});
+        if (!exists) {
+            Item item; item.path = p; item.fingerprint = sourceFingerprint(p);
+            queue.push_back(item);
+        }
     }
     if (index < 0 && !queue.empty())
         index = 0;
@@ -200,7 +205,8 @@ void Controller::loadSample() {
             return;
         }
     const int row = queue.size();
-    queue.push_back({path});
+    Item sample; sample.path = path; sample.fingerprint = sourceFingerprint(path);
+    queue.push_back(sample);
     setCurrent(row);
 }
 void Controller::remember() {
@@ -409,7 +415,7 @@ void Controller::confirmHighQuality(bool accept) {
     }
 }
 void Controller::preview() {
-    if (working || index < 0)
+    if (working || recoveryOffered || index < 0)
         return;
     if (!allowHighQuality(queue[index].settings.background == "quality", [this] { preview(); }))
         return;
@@ -614,6 +620,7 @@ void Controller::loadSession(const QUrl &u) {
             auto o = v.toObject();
             Item q;
             q.path = o["source"].toString();
+            q.fingerprint = sourceFingerprint(q.path);
             q.settings = Settings::fromJson(o["settings"].toObject());
             q.selected = o["selected"].toBool(true);
             loaded << q;

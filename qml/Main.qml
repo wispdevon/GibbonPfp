@@ -17,6 +17,7 @@ ApplicationWindow {
     readonly property color muted: backend.dark ? "#a6abb0" : "#626970"
     readonly property color line: backend.dark ? "#414447" : "#d3cec5"
     readonly property color accent: backend.buttonAccent === "blue" ? (backend.dark ? "#91B8D8" : "#315F86") : (backend.dark ? "#bfc9d1" : "#1d1f23")
+    Component.onCompleted: if (backend.recoveryPending) recoveryDialog.open()
     property int viewMode: 0
     property bool queueOpen: workspace.width >= 1100
     property bool adjustmentsOpen: workspace.width >= 900
@@ -351,6 +352,7 @@ ApplicationWindow {
                 }
             }
         }
+        WorkLabel { objectName: "autosaveError"; visible: backend.autosaveError.length > 0; text: backend.autosaveError; Layout.fillWidth: true; Layout.leftMargin: 20; Layout.rightMargin: 20; wrapMode: Text.WordWrap; color: ink; font.pixelSize: 12 }
         Rectangle {
             Layout.fillWidth: true; Layout.preferredHeight: compact ? 56 : 70; color: panel
             Rectangle { width: parent.width; height: 1; color: line }
@@ -399,12 +401,23 @@ ApplicationWindow {
     FileDialog { id: jsonOpen; title: "Open "+(fileAction==="loadPreset"?"preset":"session"); nameFilters: ["JSON (*.json)"]; onAccepted: {if(fileAction==="loadPreset")backend.loadPreset(selectedFile);else backend.loadSession(selectedFile)} }
     FileDialog { id: jsonSave; title: "Save "+(fileAction==="savePreset"?"preset":"session"); fileMode: FileDialog.SaveFile; defaultSuffix: "json"; nameFilters: ["JSON (*.json)"]; onAccepted: {if(fileAction==="savePreset")backend.savePreset(selectedFile);else backend.saveSession(selectedFile)} }
     ColorDialog { id: backdrop; title: "JPEG background color"; onAccepted: {backend.set("backgroundColor",selectedColor.toString());backend.preview()} }
+    WorkDialog { id: recoveryDialog; objectName: "recoveryDialog"; title: "Restore workspace?"; anchors.centerIn: parent; modal: true; width: Math.min(460, workspace.width - 32); closePolicy: Popup.NoAutoClose
+        ColumnLayout { width: parent.width; spacing: 16
+            WorkLabel { text: backend.recoveryMessage; Layout.fillWidth: true; wrapMode: Text.WordWrap; color: ink }
+            WorkLabel { visible: backend.autosaveError.length > 0; text: backend.autosaveError; Layout.fillWidth: true; wrapMode: Text.WordWrap; color: muted }
+            RowLayout { Layout.fillWidth: true
+                Action { text: "Start fresh"; Layout.fillWidth: true; onClicked: backend.resolveRecovery(false) }
+                Action { text: "Restore"; primary: true; enabled: backend.recoveryRestorable; Layout.fillWidth: true; onClicked: backend.resolveRecovery(true) }
+            }
+        }
+    }
     WorkDialog { id: sizeDialog; title: "Custom 3:4 size"; anchors.centerIn: parent; modal: true; standardButtons: Dialog.Ok|Dialog.Cancel
         ColumnLayout { spacing: 12; WorkLabel { text: "Width (a multiple of 3). Height follows 3:4."; color: ink } SpinBox { font.family: "Inter"; font.weight: Font.Medium; id: customWidth; from: 3; to: 60000; stepSize: 3; value: 720; editable: true } WorkLabel { text: Math.floor(customWidth.value/3)*3+" × "+Math.floor(customWidth.value/3)*4+" px · never upscaled"; color: muted } }
         onAccepted: {backend.setSize(Math.floor(customWidth.value/3)*3,Math.floor(customWidth.value/3)*4);backend.preview()}
     }
     Connections {
         target: backend
+        function onRecoveryChanged() { if (!backend.recoveryPending) recoveryDialog.close() }
         function onHighQualityConfirmationRequested() { qualityConfirmation.open() }
         function onChanged() { if (!backend.qualityConfirmationPending && qualityConfirmation.visible) qualityConfirmation.close() }
     }

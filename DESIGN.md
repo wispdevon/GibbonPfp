@@ -104,3 +104,12 @@ override has priority and is explained in place. Show per-model devices and read
 fallback reasons with expandable technical details. Release loaded models and
 device changes clear sessions/caches, preserve previews and edits, and reset High
 Quality consent. Disable these controls during work.
+
+## Workspace recovery
+
+Offer Restore / Start fresh on startup whenever recovery files exist, including
+after clean exit. Explain fallback to the previous valid snapshot and disable
+Restore if both are corrupt. Restore metadata before processing; missing files
+stay in the queue and changed source fingerprints invalidate approval. Display
+a persistent autosave error when the lock cannot be acquired or a write fails.
+High Quality consent and processing caches never persist.

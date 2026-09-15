@@ -11,6 +11,9 @@
 #include <QQuickWindow>
 #include <QScopeGuard>
 #include <QSettings>
+#include <QProcess>
+#include <QProcessEnvironment>
+#include <csignal>
 #include <QStandardPaths>
 #include <QTemporaryDir>
 #include <QtTest>
@@ -134,6 +137,145 @@ class ControllerTests : public QObject {
         QVERIFY(fresh.qualityConfirmationPending());
         fresh.cancel();
     }
+    void recoveryRoundtrip() {
+        QTemporaryDir recovery;
+        ImageStore images;
+        QJsonObject saved;
+        {
+            Controller c(&images, nullptr, recovery.path());
+            QVERIFY(!c.recoveryPending());
+            c.loadSample();
+            QTRY_VERIFY_WITH_TIMEOUT(!c.busy(), 15000);
+            c.set("brightness", .23);
+            c.stroke(QVariantList{QVariantMap{{"x", .5}, {"y", .5}}}, true, .05);
+            QTRY_VERIFY_WITH_TIMEOUT(!c.busy(), 15000);
+            c.approve();
+            c.select(0, false);
+            QVERIFY(c.queue[0].settings.approved);
+            QVERIFY(!c.queue[0].selected);
+            c.queue[0].settings.background = "quality";
+            saved = c.recoveryJson();
+            QVERIFY(!QFile::exists(recovery.filePath("current.json")));
+            QTRY_VERIFY_WITH_TIMEOUT(QFile::exists(recovery.filePath("current.json")), 2500);
+        }
+        Controller c(&images, nullptr, recovery.path());
+        QVERIFY(c.recoveryPending());
+        QVERIFY(c.recoveryRestorable());
+        QVERIFY(!c.busy());
+        QCOMPARE(c.items().size(), 0);
+        c.resolveRecovery(true);
+        QCOMPARE(c.recoveryJson(), saved);
+        QVERIFY(c.result().isEmpty());
+        QVERIFY(!c.highQualityLoaded());
+        c.preview();
+        QVERIFY(c.qualityConfirmationPending());
+        c.cancel();
+    }
+    void recoveryChangedMissingAndLock() {
+        QTemporaryDir root;
+        const auto directory = root.filePath("recovery");
+        QImage photo(60, 80, QImage::Format_RGB32); photo.fill(Qt::gray);
+        const auto first = root.filePath("first.png"), second = root.filePath("second.png");
+        QVERIFY(photo.save(first)); QVERIFY(photo.save(second));
+        ImageStore images;
+        {
+            Controller c(&images, nullptr, directory);
+            c.add({QUrl::fromLocalFile(first), QUrl::fromLocalFile(second)});
+            QTRY_VERIFY_WITH_TIMEOUT(!c.busy(), 15000);
+            c.queue[0].settings.approved = true;
+            c.queue[1].settings.approved = true;
+            c.index = 1;
+            c.autosaveRecovery();
+            QFile before(directory + "/current.json"); QVERIFY(before.open(QIODevice::ReadOnly));
+            auto data = before.readAll(); before.close();
+            {
+                Controller other(&images, nullptr, directory);
+                QVERIFY(other.autosaveError().contains("another instance"));
+                other.resolveRecovery(false);
+                other.autosaveRecovery();
+            }
+            QVERIFY(before.open(QIODevice::ReadOnly)); QCOMPARE(before.readAll(), data);
+        }
+        photo.fill(Qt::white); QVERIFY(photo.save(first)); QVERIFY(QFile::remove(second));
+        Controller c(&images, nullptr, directory);
+        c.resolveRecovery(true);
+        QCOMPARE(c.items().size(), 2); QCOMPARE(c.current(), 1);
+        QVERIFY(!c.queue[0].settings.approved); QVERIFY(!c.queue[1].settings.approved);
+        QVERIFY(c.queue[0].error.contains("Source changed"));
+        QCOMPARE(c.queue[1].state, "Missing");
+        QVERIFY(c.queue[1].error.contains(second));
+    }
+    void recoveryBackupCorruptionAndWriteFailure() {
+        QTemporaryDir root;
+        ImageStore images;
+        {
+            Controller c(&images, nullptr, root.path());
+            c.loadSample(); QTRY_VERIFY_WITH_TIMEOUT(!c.busy(), 15000);
+            c.autosaveRecovery();
+            c.set("brightness", .5); c.autosaveRecovery();
+        }
+        auto corrupt = [&] {
+            QFile file(root.filePath("current.json")); QVERIFY(file.open(QIODevice::WriteOnly));
+            file.write("{broken");
+        };
+        corrupt();
+        {
+            Controller c(&images, nullptr, root.path());
+            QVERIFY(c.recoveryMessage().contains("previous valid"));
+            c.resolveRecovery(true);
+            QCOMPARE(c.settings()["brightness"].toDouble(), 0.);
+            c.set("brightness", .2);
+            QVERIFY(QFile::remove(root.filePath("current.json")));
+            QVERIFY(QDir().mkdir(root.filePath("current.json")));
+            c.autosaveRecovery();
+            QVERIFY(c.autosaveError().contains("Autosave failed"));
+            QCOMPARE(c.settings()["brightness"].toDouble(), .2);
+            QVERIFY(QFile::exists(root.filePath("previous.json")));
+        }
+        QVERIFY(QDir().rmdir(root.filePath("current.json")));
+        corrupt();
+        QVERIFY(QFile::remove(root.filePath("previous.json")));
+        Controller c(&images, nullptr, root.path());
+        QVERIFY(c.recoveryPending()); QVERIFY(!c.recoveryRestorable());
+        c.resolveRecovery(false);
+        QVERIFY(!c.recoveryPending());
+        c.autosaveRecovery();
+        QFile file(root.filePath("current.json")); QVERIFY(file.open(QIODevice::ReadOnly));
+        QVERIFY(Controller::validateRecovery(file.readAll())["photos"].toArray().isEmpty());
+    }
+    void recoveryCrashWriter() {
+        const auto directory = qEnvironmentVariable("GIBBON_CRASH_RECOVERY_DIR");
+        if (directory.isEmpty()) QSKIP("Subprocess helper");
+        ImageStore images;
+        Controller c(&images, nullptr, directory);
+        c.loadSample(); QTRY_VERIFY_WITH_TIMEOUT(!c.busy(), 15000);
+        c.set("brightness", .55);
+        QTRY_VERIFY_WITH_TIMEOUT(QFile::exists(directory + "/current.json"), 2500);
+#ifdef Q_OS_UNIX
+        std::raise(SIGKILL);
+#else
+        std::_Exit(0);
+#endif
+    }
+    void recoveryAfterForcedTermination() {
+        QTemporaryDir root;
+        QProcess child;
+        auto env = QProcessEnvironment::systemEnvironment();
+        env.insert("GIBBON_CRASH_RECOVERY_DIR", root.path());
+        child.setProcessEnvironment(env);
+        child.start(QCoreApplication::applicationFilePath(), {"recoveryCrashWriter"});
+        QVERIFY(child.waitForStarted());
+        QVERIFY(child.waitForFinished(20000));
+#ifdef Q_OS_UNIX
+        QCOMPARE(child.exitStatus(), QProcess::CrashExit);
+#endif
+        ImageStore images;
+        Controller c(&images, nullptr, root.path());
+        QVERIFY2(c.autosaveError().isEmpty(), qPrintable(c.autosaveError()));
+        QVERIFY(c.recoveryRestorable());
+        c.resolveRecovery(true);
+        QCOMPARE(c.settings()["brightness"].toDouble(), .55);
+    }
     void progressAndStaleUpdates() {
         ImageStore images;
         Controller c(&images);
@@ -197,6 +339,37 @@ class ControllerTests : public QObject {
         QCOMPARE(c.settings(), settings);
         QCOMPARE(c.revision(), revision);
         QSettings().clear();
+    }
+    void recoveryDialogScreenshot() {
+        QTemporaryDir root;
+        { ImageStore images; Controller c(&images, nullptr, root.path());
+          c.loadSample(); QTRY_VERIFY_WITH_TIMEOUT(!c.busy(), 15000); }
+        QQmlApplicationEngine qml;
+        auto *images = new ImageStore;
+        qml.addImageProvider("photos", images);
+        Controller c(images, nullptr, root.path());
+        c.setUiScale(150);
+        qml.rootContext()->setContextProperty("backend", &c);
+        qml.load(QUrl::fromLocalFile(GIBBON_SOURCE_DIR "/qml/Main.qml"));
+        QVERIFY(!qml.rootObjects().isEmpty());
+        auto *window = qobject_cast<QQuickWindow *>(qml.rootObjects().front());
+        QVERIFY(window); window->resize(1024, 720); window->show();
+        QTest::qWait(200);
+        auto *dialog = window->findChild<QObject *>("recoveryDialog");
+        QVERIFY(dialog); QVERIFY(dialog->property("visible").toBool());
+        QVERIFY(dialog->property("height").toDouble() * 1.5 <= 720);
+        const auto captures = qEnvironmentVariable("GIBBON_TEST_SCREENSHOTS");
+        if (!captures.isEmpty()) { QDir().mkpath(captures); QVERIFY(window->grabWindow().save(captures + "/recovery-150.png")); }
+        c.resolveRecovery(true);
+        QVERIFY(!dialog->property("visible").toBool());
+        c.recoveryError = "Autosave unavailable: another instance owns recovery. Save a session manually.";
+        emit c.recoveryChanged();
+        QTest::qWait(150);
+        auto *warning = window->findChild<QQuickItem *>("autosaveError");
+        QVERIFY(warning); QVERIFY(warning->isVisible());
+        if (!captures.isEmpty()) QVERIFY(window->grabWindow().save(captures + "/autosave-unavailable-150.png"));
+        qDeleteAll(qml.rootObjects());
+        c.setUiScale(100);
     }
     void workspace() {
         QTemporaryDir dir;

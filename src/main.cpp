@@ -239,7 +239,7 @@ int main(int argc, char **argv) {
         QQmlApplicationEngine qml;
         auto *store = new ImageStore;
         qml.addImageProvider("photos", store);
-        Controller controller(store);
+        Controller controller(store, nullptr, {}, !p.isSet("smoke-test") && !p.isSet("screenshot"));
         qml.rootContext()->setContextProperty("backend", &controller);
         qml.loadFromModule("Gibbon", "Main");
         if (qml.rootObjects().isEmpty())
