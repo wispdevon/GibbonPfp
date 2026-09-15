@@ -420,7 +420,7 @@ ApplicationWindow {
                 text: "Load the portrait model into RAM? Allow roughly 8–10 GB of available memory. Compatible NVIDIA GPUs are used automatically; otherwise processing uses the CPU. GPU memory needs vary, and CPU processing may take tens of seconds per image. These are estimates, not guaranteed requirements."
             }
             WorkLabel { Layout.fillWidth: true; wrapMode: Text.WordWrap; color: ink
-                text: "Once loaded, the model stays in memory until you close GibbonPfp—even when you switch to Fast or Off. You will not be asked again while it remains loaded."
+                text: "Once loaded, the model stays in memory until you release models or close GibbonPfp—even when you switch to Fast or Off. You will not be asked again while it remains loaded."
             }
             RowLayout { Layout.fillWidth: true
                 Action { objectName: "cancelQuality"; text: "Cancel"; Layout.fillWidth: true; onClicked: qualityConfirmation.reject() }
@@ -434,9 +434,15 @@ ApplicationWindow {
             implicitHeight: Math.min(modelContents.implicitHeight, workspace.height - 140)
             ColumnLayout { id: modelContents; width: modelScroll.availableWidth; spacing: 16
             WorkLabel { text: "Face detection and Fast are bundled. High Quality downloads 973 MB and can use about 7 GB of memory; allow tens of seconds per photo on CPU. Photos stay on this device."; Layout.fillWidth: true; wrapMode: Text.WordWrap; color: ink }
+            WorkLabel { text: "Processing device"; color: ink }
+            Choice { objectName: "processingDevice"; Layout.fillWidth: true; model: ["Automatic", "CPU"]; currentIndex: backend.processingDevice === "cpu" ? 1 : 0; enabled: !backend.busy; onActivated: backend.processingDevice = currentIndex === 1 ? "cpu" : "automatic" }
+            WorkLabel { visible: backend.cpuOverride; text: "GIBBON_INFERENCE_DEVICE=cpu overrides this preference until the app exits."; Layout.fillWidth: true; wrapMode: Text.WordWrap; color: muted }
             WorkLabel { objectName: "inferenceStatus"; text: backend.inferenceStatus; Layout.fillWidth: true; wrapMode: Text.WordWrap; color: ink }
+            WorkCheckBox { id: runtimeDetails; text: "Technical details" }
+            WorkLabel { visible: runtimeDetails.checked; text: backend.inferenceDetails; Layout.fillWidth: true; wrapMode: Text.WrapAnywhere; color: muted }
+            Action { objectName: "releaseModels"; text: "Release loaded models"; Layout.fillWidth: true; enabled: !backend.busy; onClicked: backend.releaseModels() }
             WorkLabel { text: backend.modelDescription(); color: muted; font.family: "Geist Mono"; font.pixelSize: 12 }
-            WorkLabel { Layout.fillWidth: true; wrapMode: Text.WordWrap; color: muted; text: backend.highQualityLoaded ? "High Quality is loaded and cached until the app closes." : "High Quality will ask for confirmation before its first load." }
+            WorkLabel { Layout.fillWidth: true; wrapMode: Text.WordWrap; color: muted; text: backend.highQualityLoaded ? "High Quality is loaded. Release loaded models to free its session." : "High Quality will ask for confirmation before its first load." }
             Action { text: "Download High Quality · 973 MB"; Layout.fillWidth: true; onClicked: {modelDialog.close();backend.installModel("quality")} }
             Action { text: "Repair face detector"; Layout.fillWidth: true; onClicked: {modelDialog.close();backend.installModel("face")} }
             Action { text: "Repair Fast model"; Layout.fillWidth: true; onClicked: {modelDialog.close();backend.installModel("fast")} }

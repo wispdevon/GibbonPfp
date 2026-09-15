@@ -117,19 +117,42 @@ QByteArray Models::cacheKey(const cv::Mat &rgb, const QString &id, const QString
     session(id); // Resolve the actual device before looking up compatible results.
     QCryptographicHash hash(QCryptographicHash::Sha256);
     const auto identity = id + ":" + purpose + ":preprocessing-v1:" +
-        entry(id)["sha256"].toString() + ":" + (cudaSessions.contains(id) ? "cuda" : "cpu") +
+        checksums.at(id) + ":" + (cudaSessions.contains(id) ? "cuda" : "cpu") +
         ":" + QString::number(rgb.cols) + ":" + QString::number(rgb.rows) + ":" + QString::number(rgb.type());
     hash.addData(identity.toUtf8());
     for (int y = 0; y < rgb.rows; ++y)
         hash.addData(QByteArrayView(reinterpret_cast<const char *>(rgb.ptr(y)), rgb.cols * rgb.elemSize()));
     return hash.result();
 }
+void Models::release() {
+    sessions.clear();
+    cache.clear();
+    cudaSessions.clear();
+    cpuFallback.clear();
+    checksums.clear();
+    qualityLoaded.store(false);
+    std::lock_guard lock(statusMutex);
+    devices.clear();
+    diagnostics.clear();
+}
+void Models::setPreference(const QString &value) {
+    if (value != "automatic" && value != "cpu") throw std::runtime_error("Invalid processing device");
+    if (preference == value) return;
+    release();
+    preference = value;
+}
+QString Models::inferenceDetails() const {
+    std::lock_guard lock(statusMutex);
+    QStringList lines;
+    for (const auto &[id, message] : diagnostics) lines << id + ": " + message;
+    return lines.isEmpty() ? "No runtime errors reported." : lines.join("\n");
+}
 QString Models::inferenceStatus() const {
     std::lock_guard lock(statusMutex);
     QStringList lines;
     for (const auto &[id, device] : devices)
         lines << (id == "face" ? "Face" : id == "fast" ? "Fast" : "High Quality") + QString(": ") + device;
-    return lines.isEmpty() ? (qEnvironmentVariable("GIBBON_INFERENCE_DEVICE") == "cpu"
+    return lines.isEmpty() ? (cpuRequested()
                                  ? "CPU requested · no models loaded"
                                  : "Automatic GPU selection · no models loaded") : lines.join("\n");
 }
@@ -140,6 +163,7 @@ void Models::setDevice(const QString &id, const QString &device) {
 Ort::Session &Models::session(const QString &id) {
     if (!sessions.contains(id)) {
         const auto path = locate(id);
+        checksums[id] = entry(id)["sha256"].toString();
         auto create = [&](bool cuda) {
             Ort::SessionOptions options;
             options.SetIntraOpNumThreads(2);
@@ -168,7 +192,7 @@ Ort::Session &Models::session(const QString &id) {
 #endif
         };
         const auto providers = Ort::GetAvailableProviders();
-        const bool tryCuda = qEnvironmentVariable("GIBBON_INFERENCE_DEVICE") != "cpu" &&
+        const bool tryCuda = !cpuRequested() &&
                              !cpuFallback.contains(id) &&
                              std::find(providers.begin(), providers.end(), "CUDAExecutionProvider") != providers.end();
         if (tryCuda) {
@@ -179,11 +203,14 @@ Ort::Session &Models::session(const QString &id) {
             } catch (const Ort::Exception &e) {
                 qWarning() << "CUDA initialization failed for" << id << e.what();
                 cpuFallback.insert(id);
+                std::lock_guard lock(statusMutex);
+                diagnostics[id] = QString::fromUtf8(e.what());
             }
         }
         if (!sessions.contains(id)) {
             sessions[id] = create(false);
-            setDevice(id, cpuFallback.contains(id) ? "CPU (GPU unavailable or insufficient memory)" : "CPU");
+            setDevice(id, cpuFallback.contains(id) ? "CPU (GPU initialization or execution failed)" :
+                          cpuRequested() ? "CPU" : "CPU (CUDA provider unavailable in this runtime)");
         }
         if (id == "quality")
             qualityLoaded.store(true);
@@ -220,6 +247,7 @@ std::vector<Ort::Value> Models::run(const QString &id, const cv::Mat &rgb, int s
         if (!cudaSessions.contains(id) || e.GetOrtErrorCode() == ORT_INVALID_ARGUMENT)
             throw;
         qWarning() << "CUDA inference failed; retrying on CPU for" << id << e.what();
+        { std::lock_guard lock(statusMutex); diagnostics[id] = QString::fromUtf8(e.what()); }
         cudaSessions.erase(id);
         cpuFallback.insert(id);
         sessions.erase(id);

@@ -275,7 +275,7 @@ RAM. A 973 MB file does not imply a 973 MB working set.
 The shared desktop/CLI engine automatically tries NVIDIA CUDA when the linked
 ONNX Runtime exposes that provider. Unsupported operations can still use CPU.
 Session initialization or GPU execution failures retry on CPU, which remains
-selected for that model until restart. **Models** displays the selected device
+selected for that model until sessions are released. **Models** displays the selected device
 for each loaded model. Image decoding, cropping, mask refinement, and export
 encoding still run on CPU. Sessions remain cached on their selected device.
 
@@ -314,9 +314,18 @@ copies before feathering and strokes. Failed or cancelled processing clears the
 cache. Decoding and export still run on each preview. Use Fast for more responsive adjustments, then High Quality for the final
 mask. There is no measured High Quality speedup from a 2 MP input cap in this app.
 
-Loaded model sessions stay cached until the app closes or the CLI process exits.
+**Models → Processing device** offers Automatic (default) and CPU. This local
+preference persists separately from photo settings, presets, and sessions. The
+`GIBBON_INFERENCE_DEVICE=cpu` launch override takes priority and is shown in Models.
+Models shows each session’s selected device, readable CPU fallback reasons, and
+expandable technical errors. **Release loaded models** frees sessions and the
+processing cache while retaining photos, edits, and the completed preview. Device
+changes do the same. Both controls are disabled during processing. Releasing High
+Quality resets its load confirmation; its next use asks again.
+
+Loaded model sessions stay cached until released, the app closes, or the CLI exits.
 Switching back to Fast or Off does **not** unload an already loaded High Quality
-session. Save your session and restart the app if you need to release that memory.
+session. Use **Release loaded models** if you need to release that memory.
 Batch work processes photos sequentially; larger sources and uncapped outputs
 can still increase peak RAM. Use Fast when memory or responsiveness matters most.
 

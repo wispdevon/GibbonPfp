@@ -23,6 +23,9 @@ class Controller : public QObject {
     Q_PROPERTY(QVariantMap settings READ settings NOTIFY changed)
     Q_PROPERTY(QVariantMap result READ result NOTIFY changed)
     Q_PROPERTY(int current READ current WRITE setCurrent NOTIFY changed)
+    Q_PROPERTY(QString processingDevice READ processingDevice WRITE setProcessingDevice NOTIFY changed)
+    Q_PROPERTY(bool cpuOverride READ cpuOverride CONSTANT)
+    Q_PROPERTY(QString inferenceDetails READ inferenceDetails NOTIFY changed)
     Q_PROPERTY(QString inferenceStatus READ inferenceStatus NOTIFY changed)
     Q_PROPERTY(bool highQualityLoaded READ highQualityLoaded NOTIFY changed)
     Q_PROPERTY(bool qualityConfirmationPending READ qualityConfirmationPending NOTIFY changed)
@@ -44,6 +47,11 @@ class Controller : public QObject {
     int current() const {
         return index;
     }
+    QString processingDevice() const { return devicePreference; }
+    bool cpuOverride() const { return qEnvironmentVariable("GIBBON_INFERENCE_DEVICE") == "cpu"; }
+    QString inferenceDetails() const { return engine.inferenceDetails(); }
+    void setProcessingDevice(const QString &value);
+    Q_INVOKABLE void releaseModels();
     QString inferenceStatus() const { return engine.inferenceStatus(); }
     bool highQualityLoaded() const {
         return engine.highQualityLoaded();
@@ -124,6 +132,7 @@ class Controller : public QObject {
     int index = -1, generation = 0;
     int interfaceScale = 100;
     QString accentName = "graphite";
+    QString devicePreference = "automatic";
     bool working = false, darkTheme = false;
     QString status = "Add portraits to get started";
     QVariantMap details;

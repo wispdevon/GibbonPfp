@@ -18,6 +18,10 @@ class Models {
         return qualityLoaded.load();
     }
     QString inferenceStatus() const;
+    QString inferenceDetails() const;
+    void release(); // Caller must serialize with processing.
+    void setPreference(const QString &value);
+    bool cpuRequested() const { return preference == "cpu" || qEnvironmentVariable("GIBBON_INFERENCE_DEVICE") == "cpu"; }
     static QJsonArray manifest();
     static QString locate(const QString &id);
     static QString install(const QString &id, std::atomic_bool *cancel = nullptr,
@@ -30,6 +34,8 @@ class Models {
     static cv::Mat refineFastMask(const cv::Mat &prediction, const cv::Mat &rgb);
 
   private:
+    QString preference = "automatic";
+    std::map<QString, QString> diagnostics, checksums;
     ProcessingCache cache;
     QByteArray cacheKey(const cv::Mat &rgb, const QString &id, const QString &purpose);
     mutable std::mutex statusMutex;

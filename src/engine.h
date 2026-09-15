@@ -17,6 +17,9 @@ struct Result {
 };
 class Engine {
   public:
+    void releaseModels() { models.release(); }
+    void setDevice(const QString &value) { models.setPreference(value); }
+    QString inferenceDetails() const { return models.inferenceDetails(); }
     void clearProcessingCache() { models.clearCache(); }
     ProcessingCache::Stats cacheStats() const { return models.cacheStats(); }
     QString inferenceStatus() const { return models.inferenceStatus(); }

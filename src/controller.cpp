@@ -38,6 +38,8 @@ void ImageStore::put(const QString &id, const QImage &i) {
 }
 Controller::Controller(ImageStore *store, QObject *parent) : QObject(parent), images(store) {
     pool.setMaxThreadCount(1);
+    if (QSettings().value("processingDevice").toString() == "cpu") devicePreference = "cpu";
+    engine.setDevice(devicePreference);
     const int savedScale = QSettings().value("uiScale", 100).toInt();
     if (QList<int>{80, 90, 100, 110, 125, 150}.contains(savedScale))
         interfaceScale = savedScale;
@@ -51,6 +53,22 @@ Controller::Controller(ImageStore *store, QObject *parent) : QObject(parent), im
 Controller::~Controller() {
     cancelled = true;
     pool.waitForDone();
+}
+void Controller::releaseModels() {
+    if (working) return;
+    engine.releaseModels();
+    qualityConsent = false;
+    status = "Loaded models and processing caches released · preview retained";
+    emit changed();
+}
+void Controller::setProcessingDevice(const QString &value) {
+    if (working || value == devicePreference || (value != "automatic" && value != "cpu")) return;
+    engine.setDevice(value);
+    devicePreference = value;
+    qualityConsent = false;
+    QSettings().setValue("processingDevice", value);
+    status = "Processing device changed · models and caches released; preview retained";
+    emit changed();
 }
 void Controller::setDark(bool d) {
     darkTheme = d;

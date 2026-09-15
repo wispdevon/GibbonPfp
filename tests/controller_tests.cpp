@@ -99,6 +99,13 @@ class ControllerTests : public QObject {
         QTRY_VERIFY_WITH_TIMEOUT(!c.busy(), 15000);
         QVERIFY(c.highQualityLoaded());
         QVERIFY(c.message().contains("dimension", Qt::CaseInsensitive));
+        c.releaseModels();
+        QVERIFY(!c.highQualityLoaded());
+        c.preview();
+        QVERIFY(c.qualityConfirmationPending());
+        c.confirmHighQuality(true);
+        QTRY_VERIFY_WITH_TIMEOUT(!c.busy(), 15000);
+        QVERIFY(c.highQualityLoaded());
         const int prompts = confirmation.count();
         QVERIFY(QFile::remove(modelPath));
         c.set("background", "off");
@@ -126,6 +133,34 @@ class ControllerTests : public QObject {
         fresh.preview();
         QVERIFY(fresh.qualityConfirmationPending());
         fresh.cancel();
+    }
+    void releaseAndDevicePreference() {
+        QSettings().remove("processingDevice");
+        const auto restore = qScopeGuard([] { QSettings().remove("processingDevice"); });
+        ImageStore images;
+        Controller c(&images);
+        c.loadSample();
+        QTRY_VERIFY_WITH_TIMEOUT(!c.busy(), 15000);
+        auto result = c.result();
+        auto settings = c.settings();
+        c.setProcessingDevice("cpu");
+        QCOMPARE(c.processingDevice(), "cpu");
+        QCOMPARE(c.result(), result);
+        QCOMPARE(c.settings(), settings);
+        c.releaseModels();
+        QCOMPARE(c.result(), result);
+        QVERIFY(!c.highQualityLoaded());
+        ImageStore other;
+        Controller restored(&other);
+        QCOMPARE(restored.processingDevice(), "cpu");
+        c.set("background", "quality");
+        c.preview();
+        QVERIFY(c.qualityConfirmationPending());
+        c.setProcessingDevice("automatic");
+        QCOMPARE(c.processingDevice(), "cpu");
+        c.releaseModels();
+        QVERIFY(c.qualityConfirmationPending());
+        c.cancel();
     }
     void appearance() {
         QSettings().clear();

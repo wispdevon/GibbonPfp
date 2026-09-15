@@ -106,6 +106,17 @@ class CoreTests : public QObject {
         Models cpu;
         const auto cpuMask = cpu.mask(rgb, "fast");
         QCOMPARE(cpu.inferenceStatus(), QString("Fast: CPU"));
+        cpu.release();
+        QCOMPARE(cpu.cacheStats().bytes, size_t(0));
+        QCOMPARE(cpu.mask(rgb, "fast").size(), rgb.size());
+        Models preference;
+        preference.setPreference("cpu");
+        preference.mask(rgb, "fast");
+        QCOMPARE(preference.inferenceStatus(), QString("Fast: CPU"));
+        preference.setPreference("automatic");
+        QCOMPARE(preference.cacheStats().bytes, size_t(0));
+        preference.mask(rgb, "fast"); // launch override still wins
+        QCOMPARE(preference.inferenceStatus(), QString("Fast: CPU"));
         QVERIFY(cv::norm(mask, cpuMask, cv::NORM_INF) < .02);
     }
     void relativeZoom() {
