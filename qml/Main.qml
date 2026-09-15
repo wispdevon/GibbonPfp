@@ -8,7 +8,7 @@ ApplicationWindow {
     width: 1440; height: 940
     minimumWidth: 1024; minimumHeight: 720
     visible: true
-    title: "GibbonPfp — Portrait workspace"
+    title: "HeadshotFlow — Portrait workspace"
     color: bg
     readonly property color bg: backend.dark ? "#151617" : "#efece6"
     readonly property color panel: backend.dark ? "#202224" : "#f8f6f2"
@@ -99,7 +99,7 @@ ApplicationWindow {
                     Text { anchors.centerIn: parent; text: "g"; font.family: "Space Grotesk"; font.pixelSize: 34; font.weight: Font.Bold; color: backend.dark ? bg : panel }
                 }
                 ColumnLayout { spacing: 1
-                    WorkLabel { text: "GibbonPfp"; font.family: "Space Grotesk"; font.pixelSize: 26; font.weight: Font.Bold; color: ink }
+                    WorkLabel { text: "HeadshotFlow"; font.family: "Space Grotesk"; font.pixelSize: 26; font.weight: Font.Bold; color: ink }
                     Caption { text: "PORTRAIT WORKSPACE"; font.pixelSize: 9 }
                 }
                 Item { Layout.fillWidth: true }
@@ -433,7 +433,7 @@ ApplicationWindow {
                 text: "Load the portrait model into RAM? Allow roughly 8–10 GB of available memory. Compatible NVIDIA GPUs are used automatically; otherwise processing uses the CPU. GPU memory needs vary, and CPU processing may take tens of seconds per image. These are estimates, not guaranteed requirements."
             }
             WorkLabel { Layout.fillWidth: true; wrapMode: Text.WordWrap; color: ink
-                text: "Once loaded, the model stays in memory until you release models or close GibbonPfp—even when you switch to Fast or Off. You will not be asked again while it remains loaded."
+                text: "Once loaded, the model stays in memory until you release models or close HeadshotFlow—even when you switch to Fast or Off. You will not be asked again while it remains loaded."
             }
             RowLayout { Layout.fillWidth: true
                 Action { objectName: "cancelQuality"; text: "Cancel"; Layout.fillWidth: true; onClicked: qualityConfirmation.reject() }

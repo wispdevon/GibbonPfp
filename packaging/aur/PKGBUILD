@@ -1,8 +1,8 @@
 # Maintainer: Devon Labs <https://devonlabs.space>
 pkgname=gibbonpfp-git
-pkgver=0.1.0.r9.g153f8ae
+pkgver=1.0.1.r9.g153f8ae
 pkgrel=1
-pkgdesc='Offline Qt portrait editor and batch image processor'
+pkgdesc='HeadshotFlow offline headshot editor and batch image processor'
 arch=('x86_64')
 url='https://github.com/wispdevon/GibbonPfp'
 license=('Apache-2.0')

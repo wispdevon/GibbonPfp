@@ -11,8 +11,8 @@ curl -fL https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous
 echo '36a2d7e274d12e1050d0e9ecfe11d339ed54720b2bec464c286d53f8b07f5c62  dist/tools/linuxdeploy.AppImage' | sha256sum -c -
 chmod +x dist/tools/linuxdeploy.AppImage
 export APPIMAGE_EXTRACT_AND_RUN=1
-export VERSION=0.1.0
-export OUTPUT="$PWD/dist/GibbonPfp-0.1.0-x86_64.AppImage"
+export VERSION=1.0.1
+export OUTPUT="$PWD/dist/HeadshotFlow-1.0.1-x86_64.AppImage"
 dist/tools/linuxdeploy.AppImage --appdir "$stage_dir" --executable "$stage_dir/usr/bin/gibbonpfp" --desktop-file assets/gibbonpfp.desktop --icon-file assets/gibbonpfp.svg --output appimage
 "$OUTPUT" --version
 QT_QPA_PLATFORM=offscreen QT_QUICK_BACKEND=software "$OUTPUT" --smoke-test

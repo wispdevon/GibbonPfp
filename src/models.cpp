@@ -39,7 +39,7 @@ QJsonArray Models::manifest() {
         if (f.open(QIODevice::ReadOnly))
             return QJsonDocument::fromJson(f.readAll()).object()["models"].toArray();
     }
-    throw std::runtime_error("Model manifest missing. Reinstall GibbonPfp.");
+    throw std::runtime_error("Model manifest missing. Reinstall HeadshotFlow.");
 }
 static QJsonObject entry(const QString &id) {
     for (const auto &e : Models::manifest())

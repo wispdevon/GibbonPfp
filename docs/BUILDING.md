@@ -1,4 +1,4 @@
-# Building and distributing GibbonPfp
+# Building and distributing HeadshotFlow
 
 ## Platforms
 
@@ -98,7 +98,7 @@ Never describe an unsigned/ad-hoc package as notarized or publisher-verified.
 `scripts/install-local.sh` builds and tests the current workspace, installs it under
 `~/.local`, registers its desktop launcher, then tests the installed executable with
 source-tree model lookup disabled. Run it after each update, then close and reopen
-GibbonPfp from the launcher. `~/.local/bin/gibbonpfp --version` identifies each
+HeadshotFlow from the launcher. `~/.local/bin/gibbonpfp --version` identifies each
 installed update by commit and UTC timestamp. It uses system libraries and needs no sudo. Override
 `GIBBON_INSTALL_PREFIX` or `GIBBON_BUILD_JOBS` if needed.
 

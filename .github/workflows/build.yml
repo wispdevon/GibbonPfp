@@ -102,7 +102,7 @@ jobs:
           cd build-release
           cpack -G ZIP
           cpack -G NSIS
-          cp GibbonPfp-*.zip GibbonPfp-*.exe ../dist/
+          cp HeadshotFlow-*.zip HeadshotFlow-*.exe ../dist/
       - name: macOS package
         if: runner.os == 'macOS'
         shell: bash
@@ -116,10 +116,10 @@ jobs:
         run: |
           bash scripts/sign_macos.sh dist/portable/gibbonpfp.app
           python scripts/test_packaged.py dist/portable gibbonpfp.app/Contents/MacOS/gibbonpfp
-          hdiutil create -volname GibbonPfp -srcfolder dist/portable -ov -format UDZO dist/GibbonPfp-0.1.0-${{ matrix.name }}.dmg
+          hdiutil create -volname HeadshotFlow -srcfolder dist/portable -ov -format UDZO dist/HeadshotFlow-1.0.1-${{ matrix.name }}.dmg
           if [[ -n "$APPLE_CERTIFICATE_BASE64" ]]; then
-            xcrun notarytool submit dist/GibbonPfp-0.1.0-${{ matrix.name }}.dmg --apple-id "$APPLE_ID" --password "$APPLE_APP_PASSWORD" --team-id "$APPLE_TEAM_ID" --wait
-            xcrun stapler staple dist/GibbonPfp-0.1.0-${{ matrix.name }}.dmg
+            xcrun notarytool submit dist/HeadshotFlow-1.0.1-${{ matrix.name }}.dmg --apple-id "$APPLE_ID" --password "$APPLE_APP_PASSWORD" --team-id "$APPLE_TEAM_ID" --wait
+            xcrun stapler staple dist/HeadshotFlow-1.0.1-${{ matrix.name }}.dmg
           fi
       - name: Linux AppImage
         if: runner.os == 'Linux'
@@ -134,7 +134,7 @@ jobs:
           python scripts/test_packaged.py dist/portable "$exe"
       - uses: actions/upload-artifact@v4
         with:
-          name: GibbonPfp-${{ matrix.name }}
+          name: HeadshotFlow-${{ matrix.name }}
           path: |
             dist/*.AppImage
             dist/*.zip

@@ -1,6 +1,6 @@
 pkgbase = gibbonpfp-git
-	pkgdesc = Offline Qt portrait editor and batch image processor
-	pkgver = 0.1.0.r9.g153f8ae
+	pkgdesc = HeadshotFlow offline headshot editor and batch image processor
+	pkgver = 1.0.1.r9.g153f8ae
 	pkgrel = 1
 	url = https://github.com/wispdevon/GibbonPfp
 	arch = x86_64

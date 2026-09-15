@@ -1,6 +1,6 @@
 [Desktop Entry]
 Type=Application
-Name=GibbonPfp
+Name=HeadshotFlow
 Comment=Offline portrait preparation and batch resizing
 Exec=gibbonpfp %F
 Icon=gibbonpfp

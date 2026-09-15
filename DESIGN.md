@@ -1,6 +1,6 @@
-# GibbonPfp Design
+# HeadshotFlow Design
 
-GibbonPfp adapts the portable visual language from Strider's `DESIGN.md` to a
+HeadshotFlow adapts the portable visual language from Strider's `DESIGN.md` to a
 native Qt Quick workspace. It is an editing tool, with no account or web service.
 
 ## Foundation

@@ -1,8 +1,8 @@
 <a id="readme-top"></a>
 
 <div align="center">
-  <img src="assets/gibbonpfp.png" alt="GibbonPfp icon" width="88" height="88">
-  <h1>GibbonPfp</h1>
+  <img src="assets/gibbonpfp.png" alt="HeadshotFlow icon" width="88" height="88">
+  <h1>HeadshotFlow</h1>
   <p>Frame, refine, and export consistent portraits. All on your device.</p>
   <p>
     <a href="https://github.com/wispdevon/GibbonPfp/releases">Releases</a> ·
@@ -14,14 +14,18 @@
 [![Build and package](https://github.com/wispdevon/GibbonPfp/actions/workflows/build.yml/badge.svg)](https://github.com/wispdevon/GibbonPfp/actions/workflows/build.yml)
 [![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
 
+The app is now **HeadshotFlow**. The `gibbonpfp` command, package ID, and
+settings/recovery locations remain compatible with existing installations.
+The source repository remains at `wispdevon/GibbonPfp`.
+
 ## About the project
 
-GibbonPfp is an offline desktop editor and command-line tool for preparing profile
+HeadshotFlow is an offline desktop editor and command-line tool for preparing profile
 pictures. Import portraits, adjust framing and brightness, optionally remove the
 background, and export a single photo or a batch without overwriting originals.
 The default output is **360 × 480 pixels, portrait 3:4**.
 
-![Native GibbonPfp workspace with the built-in sample, 12% headroom, and 60% crop zoom](docs/images/workspace.png)
+![Native HeadshotFlow workspace with the built-in sample, 12% headroom, and 60% crop zoom](docs/images/workspace.png)
 
 *Native Linux screenshot using the built-in illustrated sample; no private photos.*
 
@@ -115,7 +119,7 @@ scripts/package-arch-local.sh
 ```
 
 The user install lives under `~/.local` and includes a desktop launcher. Reopen
-GibbonPfp after an update; `~/.local/bin/gibbonpfp --version` reports its build ID.
+HeadshotFlow after an update; `~/.local/bin/gibbonpfp --version` reports its build ID.
 The Arch package uses system libraries and requires administrator authentication
 to install. An AUR-ready `gibbonpfp-git` recipe is in [packaging/aur](packaging/aur);
 adding it to this repository does not automatically publish it to AUR.
@@ -185,7 +189,7 @@ Export PNG to retain transparency or JPEG to composite onto the selected backdro
 **Sharpen for screen** is checked by default at **Standard** in Export. Low and
 High decrease or increase its strength. It runs after resizing and brightness,
 before background composition and encoding, so both previews and exports include
-it. These are GibbonPfp's own presets using Lightroom-style level names, not an
+it. These are HeadshotFlow's own presets using Lightroom-style level names, not an
 exact reproduction of Lightroom or Capture One's proprietary processing.
 
 ### Appearance and navigation
@@ -224,13 +228,13 @@ Model identities, exact download URLs, and SHA-256 hashes are pinned in the
 ### What does High Quality do, and what does it load?
 
 High Quality uses **BiRefNet's human-portrait model** to estimate which pixels
-belong to the subject. It produces a soft foreground mask, which GibbonPfp uses
+belong to the subject. It produces a soft foreground mask, which HeadshotFlow uses
 for PNG transparency or JPEG background composition. It does not generate a new
 person, replace facial features, or recover missing image detail. The upstream
 model is identified as `birefnet-portrait` in [rembg's model list](https://github.com/danielgatis/rembg#models).
 
 The downloaded file is **`BiRefNet-portrait-epoch_150.onnx`**, exactly
-**972,666,916 bytes**, hosted in the pinned rembg release. GibbonPfp loads that
+**972,666,916 bytes**, hosted in the pinned rembg release. HeadshotFlow loads that
 model through ONNX Runtime; it does **not** install Python, PyTorch, or the rembg
 application. Downloading stores the file on disk. The inference session is created
 when an image first needs High Quality and then cached for reuse. The desktop
@@ -542,7 +546,7 @@ and animated/multipage image workflows are outside the current scope.
 
 ## License
 
-GibbonPfp is licensed under [Apache-2.0](LICENSE). Dependencies, fonts, and model
+HeadshotFlow is licensed under [Apache-2.0](LICENSE). Dependencies, fonts, and model
 weights retain their own licenses; see [Third-party notices](THIRD_PARTY_NOTICES.md)
 and the notices distributed with the application.
 
@@ -550,7 +554,7 @@ and the notices distributed with the application.
 
 Built by [Devon Labs](https://devonlabs.space).
 For support, bug reports, and feature requests, use
-[GibbonPfp Issues](https://github.com/wispdevon/GibbonPfp/issues).
+[HeadshotFlow Issues](https://github.com/wispdevon/GibbonPfp/issues).
 
 ## Acknowledgments
 

@@ -87,11 +87,14 @@ int main(int argc, char **argv) {
     else
         application = std::make_unique<QGuiApplication>(argc, argv);
     auto &app = *application;
+    // Keep the storage identity stable for existing preferences and recovery files.
     app.setApplicationName("GibbonPfp");
+    if (!cli)
+        QGuiApplication::setApplicationDisplayName("HeadshotFlow");
     app.setOrganizationName("Devon Labs");
     app.setApplicationVersion(QString::fromUtf8(GIBBON_BUILD_VERSION));
     QCommandLineParser p;
-    p.setApplicationDescription("Offline portrait preparation · Qt desktop and batch CLI");
+    p.setApplicationDescription("HeadshotFlow · Offline headshot preparation · Qt desktop and batch CLI");
     p.addHelpOption();
     p.addVersionOption();
     p.addPositionalArgument("command", "process, models, or image paths to open in the desktop app",
@@ -273,7 +276,7 @@ int main(int argc, char **argv) {
         qDeleteAll(qml.rootObjects());
         return exitCode;
     } catch (const std::exception &e) {
-        QTextStream(stderr) << "GibbonPfp: " << errorText(e) << Qt::endl;
+        QTextStream(stderr) << "HeadshotFlow: " << errorText(e) << Qt::endl;
         return 1;
     }
 }
