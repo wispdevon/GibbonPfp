@@ -26,6 +26,9 @@ class Controller : public QObject {
     Q_PROPERTY(bool busy READ busy NOTIFY changed)
     Q_PROPERTY(QString message READ message NOTIFY changed)
     Q_PROPERTY(int revision READ revision NOTIFY changed)
+    Q_PROPERTY(int uiScale READ uiScale WRITE setUiScale NOTIFY appearanceChanged)
+    Q_PROPERTY(
+        QString buttonAccent READ buttonAccent WRITE setButtonAccent NOTIFY appearanceChanged)
     Q_PROPERTY(bool dark READ dark WRITE setDark NOTIFY changed)
   public:
     explicit Controller(ImageStore *store, QObject *parent = nullptr);
@@ -50,6 +53,14 @@ class Controller : public QObject {
     bool dark() const {
         return darkTheme;
     }
+    int uiScale() const {
+        return interfaceScale;
+    }
+    QString buttonAccent() const {
+        return accentName;
+    }
+    void setUiScale(int value);
+    void setButtonAccent(const QString &value);
     void setDark(bool dark);
     void setCurrent(int value);
     Q_INVOKABLE void add(const QList<QUrl> &urls, bool recursive = false);
@@ -82,6 +93,7 @@ class Controller : public QObject {
     Q_INVOKABLE void stroke(const QVariantList &points, bool keep, double radius);
   signals:
     void changed();
+    void appearanceChanged();
 
   private:
     struct Item {
@@ -93,6 +105,8 @@ class Controller : public QObject {
     };
     QVector<Item> queue;
     int index = -1, generation = 0;
+    int interfaceScale = 100;
+    QString accentName = "graphite";
     bool working = false, darkTheme = false;
     QString status = "Add portraits to get started";
     QVariantMap details;

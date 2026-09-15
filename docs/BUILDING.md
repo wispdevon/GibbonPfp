@@ -92,3 +92,39 @@ Never describe an unsigned/ad-hoc package as notarized or publisher-verified.
    platform validated.
 4. Create a version tag and GitHub release, attaching only successful packages.
 5. Include signing status, tested platforms, known limits, and package SHA-256 hashes.
+
+## Arch Linux / AUR and local updates
+
+`scripts/install-local.sh` builds and tests the current workspace, installs it under
+`~/.local`, registers its desktop launcher, then tests the installed executable with
+source-tree model lookup disabled. Run it after each update, then close and reopen
+GibbonPfp from the launcher. `~/.local/bin/gibbonpfp --version` identifies each
+installed update by commit and UTC timestamp. It uses system libraries and needs no sudo. Override
+`GIBBON_INSTALL_PREFIX` or `GIBBON_BUILD_JOBS` if needed.
+
+`packaging/aur/PKGBUILD` and `.SRCINFO` define `gibbonpfp-git`, using the Git commit
+count/hash for versions and checksum-pinned face/Fast models. The system install
+layout puts the executable in `/usr/bin`, models in `/usr/share/gibbonpfp/models`,
+and launcher/icon/license files in their standard directories. It does not bundle
+Qt or native runtime libraries. See the [Arch VCS package guidelines](https://wiki.archlinux.org/title/VCS_package_guidelines).
+
+To build the recipe after these source changes are available on the upstream Git
+remote, run `makepkg -si` in `packaging/aur`. Regenerate metadata with
+`makepkg --printsrcinfo > .SRCINFO` whenever the recipe changes. Publishing requires
+submitting these two files to the separate AUR Git repository; adding them here
+does not automatically publish an AUR listing. Once published, `yay -S gibbonpfp-git`
+installs it, and `yay -Syu --devel` checks for newer upstream Git revisions.
+
+To package local edits before pushing them:
+
+```bash
+scripts/package-arch-local.sh
+# Install the resulting main package (not the optional debug-symbol package):
+sudo pacman -U build-arch-local/gibbonpfp-git-*.pkg.tar.zst
+```
+
+Local snapshot versions include a UTC timestamp. Package creation runs CTest and
+CLI integration checks. System installation requires administrator authentication.
+The per-user test installation is separate from pacman's package database; remove
+its `~/.local/bin/gibbonpfp` and `~/.local/share/applications/gibbonpfp.desktop` when
+switching exclusively to the system package, so the user launcher does not shadow it.

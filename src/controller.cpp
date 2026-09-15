@@ -37,6 +37,11 @@ void ImageStore::put(const QString &id, const QImage &i) {
 }
 Controller::Controller(ImageStore *store, QObject *parent) : QObject(parent), images(store) {
     pool.setMaxThreadCount(1);
+    const int savedScale = QSettings().value("uiScale", 100).toInt();
+    if (QList<int>{80, 90, 100, 110, 125, 150}.contains(savedScale))
+        interfaceScale = savedScale;
+    if (QSettings().value("buttonAccent", "graphite").toString() == "blue")
+        accentName = "blue";
     darkTheme =
         QSettings()
             .value("dark", QGuiApplication::styleHints()->colorScheme() == Qt::ColorScheme::Dark)
@@ -50,6 +55,20 @@ void Controller::setDark(bool d) {
     darkTheme = d;
     QSettings().setValue("dark", d);
     emit changed();
+}
+void Controller::setUiScale(int value) {
+    if (!QList<int>{80, 90, 100, 110, 125, 150}.contains(value) || value == interfaceScale)
+        return;
+    interfaceScale = value;
+    QSettings().setValue("uiScale", value);
+    emit appearanceChanged();
+}
+void Controller::setButtonAccent(const QString &value) {
+    if ((value != "graphite" && value != "blue") || value == accentName)
+        return;
+    accentName = value;
+    QSettings().setValue("buttonAccent", value);
+    emit appearanceChanged();
 }
 QVariantList Controller::items() const {
     QVariantList list;
@@ -235,8 +254,7 @@ void Controller::showResult(const Result &r, int row) {
                 r.preview.scaled(96, 128, Qt::KeepAspectRatio, Qt::SmoothTransformation));
     if (row == index) {
         images->put("source", r.source);
-        images->put("output",
-                    r.preview.scaled(1400, 1400, Qt::KeepAspectRatio, Qt::SmoothTransformation));
+        images->put("output", r.preview);
         images->put("mask", r.mask);
         details = {{"width", r.outputSize.width()},
                    {"height", r.outputSize.height()},

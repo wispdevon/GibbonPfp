@@ -89,7 +89,7 @@ int main(int argc, char **argv) {
     auto &app = *application;
     app.setApplicationName("GibbonPfp");
     app.setOrganizationName("Devon Labs");
-    app.setApplicationVersion("0.1.0");
+    app.setApplicationVersion(QString::fromUtf8(GIBBON_BUILD_VERSION));
     QCommandLineParser p;
     p.setApplicationDescription("Offline portrait preparation · Qt desktop and batch CLI");
     p.addHelpOption();

@@ -24,14 +24,30 @@ have a text label. Theme follows the OS initially and persists locally.
 
 ## Work surface
 
-Queue → preview → adjustments follows the work sequence. Adjustment sections are
-Frame, Refine, Export. Dense regions scroll independently. Minimum window size
-is 1024 × 720, with narrower queue and controls below 1200px. Avoid nested cards,
+Queue → Preview / Crop → Result → adjustments follows the work sequence.
+The two image panes start at equal widths, with a draggable divider. Queue and
+adjustments collapse independently and initially hide when logical space is limited.
+Narrow workspaces show at most one sidebar. Adjustment sections are Frame, Refine,
+Export. Dense regions scroll independently. Minimum window size is 1024 × 720. Avoid nested cards,
 decorative heroes, pills for ordinary commands, and distracting idle animation.
 
-Output previews are decoded from the actual JPEG/PNG bytes. Original, crop, and
-mask views must be clearly distinguished. Keyboard navigation, tool labels,
+Output previews are decoded from the actual JPEG/PNG bytes. The left pane shows
+the finished export inside the editable crop, over a dimmed
+full source. The right pane offers Result/Mask inspection and crop-coordinate
+brushes. Both share one completed output revision; mark pending work as Updating.
+Use a checkerboard behind transparent pixels. Keyboard navigation, tool labels,
 visible focus, and non-drag crop zoom controls remain available.
+
+## Appearance
+
+Appearance contains theme, UI scale (80, 90, 100, 110, 125, 150%), and button
+accent (Graphite or Blue). Persist these with QSettings, separate from image data.
+Default to 100% and Graphite. Scale the logical QML workspace together, above Qt
+display scaling; leave native file dialogs and export dimensions unchanged.
+Blue uses `#315F86` in light mode and `#91B8D8` in dark mode. Section headings
+remain graphite, bold Space Grotesk at 16px, with stronger separators. Primary
+actions use solid accent fills; secondary actions have strong borders and visible
+hover and keyboard-focus states. Keep both image panes visible at all scales.
 
 ## Review behavior
 

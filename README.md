@@ -17,7 +17,8 @@ export without changing the originals.
 - RAW white-balance presets, temperature/tint, and highlight recovery.
 - Original crop dimensions or custom 3:4 sizes when the default cap is disabled; no automatic upscaling.
 - Reusable presets, editable sessions, undo/reset, filename prefixes, and collision-safe exports.
-- Light and dark themes adapted from Strider's editorial workspace design.
+- Side-by-side crop and export previews with a draggable divider and collapsible sidebars.
+- Persistent light/dark themes, interface scaling, and graphite or blue button accents.
 - Shared processing engine for the desktop interface and CLI.
 
 ## Tech Stack
@@ -52,21 +53,43 @@ On macOS, the executable is inside `build/gibbonpfp.app/Contents/MacOS/`.
 On Windows, use `build/gibbonpfp.exe`. No Python interpreter is needed by the
 installed application; Python is used only by development scripts.
 
+### Install local updates on Arch Linux
+
+Run `scripts/install-local.sh` to build, test, and install the current workspace
+under `~/.local`, including a desktop launcher. Reopen GibbonPfp to test the update.
+An AUR-ready `gibbonpfp-git` recipe and local Arch package builder are included;
+see [Arch packaging](docs/BUILDING.md#arch-linux--aur-and-local-updates).
+
 ### Desktop workflow
 
 1. Add photos or a folder. Folder import includes subfolders.
 2. Select a portrait. Auto-crop prepares a 3:4 frame with approximately 8% headroom.
-3. Use **Crop** view to drag the frame; adjust zoom, brightness, or backgrounds.
+3. Use the left **Preview / Crop** pane to drag the frame; adjust zoom, brightness, or backgrounds.
 4. Use **Apply settings to selected** to share adjustments. Individual crops stay
    with their original photos; mask strokes are not copied between subjects.
 5. **Prepare selected** identifies exceptions. Adjust or approve photos marked
    **Needs review**, or enable **Fully automatic batch** and apply it to the selection.
 6. Export the current photo or selected batch into an output folder.
 
-The Output view displays the decoded export bytes. Original and Crop views show
-the developed source. Mask brushes operate on the current crop; changing framing
-clears the strokes. Brightness and RAW controls take effect after the
+The right **Result** pane displays the decoded export bytes. The left pane shows
+the same finished output inside the crop, with the full source dimmed outside it.
+Both panes update together after processing; **Updating…** marks work in progress.
+Drag the divider to change pane widths. Click the left crop or tab to it for arrow-key
+adjustments. Use **Result / Mask** inspection and keep/remove brushes on the right.
+Transparency appears on a checkerboard. Brushes operate on the current crop;
+changing framing clears the strokes. Brightness and RAW controls take effect after the
 slider is released. **Refresh preview** explicitly recomputes the current settings.
+
+Use **Queue** and **Adjustments** to collapse or reopen the sidebars; adjustments
+scroll independently. At narrow window sizes or large UI scales, sidebars initially
+collapse to preserve image space. Narrow workspaces show one sidebar at a time.
+**Workspace** contains sessions and model management.
+
+**Appearance** offers Light/Dark theme, UI scales of 80%, 90%, 100%, 110%, 125%,
+and 150%, and Graphite/Blue button accents. The defaults are 100% and Graphite.
+Changes apply immediately and persist locally, separately from photo settings,
+presets, and sessions. Scaling affects text, controls, spacing, and panels on top
+of Qt display scaling; export dimensions and operating-system file dialogs are unchanged.
 
 ## Commands
 
@@ -105,6 +128,8 @@ gibbonpfp --help
 cmake --build --preset dev
 ctest --preset dev
 python3 scripts/test_cli.py build/gibbonpfp
+# Optional native Qt screenshot matrix (synthetic fixture; no private photos).
+GIBBON_TEST_SCREENSHOTS=/tmp/gibbon-ui-checks ctest --preset dev -R controller
 ```
 
 Exit codes: **0** complete success; **2** held photos or per-file failures;
@@ -152,7 +177,7 @@ per-photo settings, selection, approvals, and mask strokes; they do not embed th
 photos. Move the original files only after finishing a session. Presets omit
 photo-specific crops, strokes, approvals, and reference paths.
 
-The OS configuration directory stores the theme. Downloaded models live in the
+The OS configuration directory stores the theme, UI scale, and button accent. Downloaded models live in the
 Qt application-local data directory under `models/`. Exports remove source EXIF,
 GPS, and other metadata and include an sRGB profile. Batch exports also write a
 JSON report in the destination folder.

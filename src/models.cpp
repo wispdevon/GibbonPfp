@@ -24,6 +24,7 @@ static QStringList roots() {
         r << qEnvironmentVariable("GIBBON_MODEL_DIR");
     r << QStandardPaths::writableLocation(QStandardPaths::AppLocalDataLocation) + "/models"
       << QCoreApplication::applicationDirPath() + "/models"
+      << QCoreApplication::applicationDirPath() + "/../share/gibbonpfp/models"
       << QCoreApplication::applicationDirPath() + "/../Resources/models";
     if (!qEnvironmentVariableIsSet("GIBBON_DISABLE_SOURCE_MODELS"))
         r << QString::fromUtf8(GIBBON_SOURCE_MODELS);

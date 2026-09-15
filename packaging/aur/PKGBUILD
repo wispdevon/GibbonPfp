@@ -1,0 +1,50 @@
+# Maintainer: Devon Labs <https://devonlabs.space>
+pkgname=gibbonpfp-git
+pkgver=0.1.0.r9.g153f8ae
+pkgrel=1
+pkgdesc='Offline Qt portrait editor and batch image processor'
+arch=('x86_64')
+url='https://github.com/wispdevon/GibbonPfp'
+license=('Apache-2.0')
+depends=('gcc-libs' 'glibc' 'qt6-base' 'qt6-declarative' 'opencv' 'onnxruntime' 'libraw' 'libheif' 'libtiff' 'libwebp')
+makedepends=('git' 'cmake' 'ninja' 'pkgconf')
+checkdepends=('python')
+provides=('gibbonpfp')
+conflicts=('gibbonpfp')
+source=('GibbonPfp::git+https://github.com/wispdevon/GibbonPfp.git'
+        'face_detection_yunet_2023mar.onnx::https://media.githubusercontent.com/media/opencv/opencv_zoo/47534e27c9851bb1128ccc0102f1145e27f23f98/models/face_detection_yunet/face_detection_yunet_2023mar.onnx'
+        'human_segmentation_pphumanseg_2023mar.onnx::https://media.githubusercontent.com/media/opencv/opencv_zoo/47534e27c9851bb1128ccc0102f1145e27f23f98/models/human_segmentation_pphumanseg/human_segmentation_pphumanseg_2023mar.onnx'
+)
+sha256sums=('SKIP'
+            '8f2383e4dd3cfbb4553ea8718107fc0423210dc964f9f4280604804ed2552fa4'
+            '552d8a984054e59b5d773d24b9b12022b22046ceb2bbc4c9aaeaceb36a9ddf24'
+)
+
+pkgver() {
+    cd "$srcdir/GibbonPfp"
+    local version
+    version=$(sed -n 's/project(GibbonPfp VERSION \([^ ]*\).*/\1/p' CMakeLists.txt)
+    printf '%s.r%s.g%s' "$version" "$(git rev-list --count HEAD)" "$(git rev-parse --short HEAD)"
+}
+
+prepare() {
+    cp "$srcdir/face_detection_yunet_2023mar.onnx" "$srcdir/GibbonPfp/assets/models/"
+    cp "$srcdir/human_segmentation_pphumanseg_2023mar.onnx" "$srcdir/GibbonPfp/assets/models/"
+}
+
+build() {
+    cmake -S "$srcdir/GibbonPfp" -B "$srcdir/build" -G Ninja \
+        -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr \
+        -DGIBBON_SYSTEM_INSTALL=ON -DGIBBON_BUNDLED_ORT=OFF -DBUILD_TESTING=ON \
+        -DGIBBON_BUILD_VERSION="$pkgver"
+    cmake --build "$srcdir/build"
+}
+
+check() {
+    ctest --test-dir "$srcdir/build" --output-on-failure
+    python "$srcdir/GibbonPfp/scripts/test_cli.py" "$srcdir/build/gibbonpfp"
+}
+
+package() {
+    DESTDIR="$pkgdir" cmake --install "$srcdir/build"
+}

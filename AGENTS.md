@@ -12,3 +12,11 @@ C++20 / Qt Quick desktop application with a shared CLI image engine. Follow
 - Never claim clipping-free JPEG detail, perfect segmentation, universal RAW camera
   compatibility, or platform validation without evidence.
 - Use Conventional Commit subjects. Do not commit build products or private photos.
+
+## Local test installation
+
+After each implemented update, run `scripts/install-local.sh` to build, validate,
+and install the current workspace under `~/.local` for the user to test. This is
+authorized by the user; do not ask again. Report failures rather than claiming the
+installed copy was updated. Do not publish to AUR or push changes implicitly.
+Keep `packaging/aur/PKGBUILD` and `.SRCINFO` in sync when packaging inputs change.
