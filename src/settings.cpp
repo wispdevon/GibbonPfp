@@ -10,6 +10,10 @@ namespace gibbon {
 QJsonObject Settings::json() const {
     return {{"version", 1},
             {"autoCrop", autoCrop},
+            {"sharpenScreen", sharpenScreen},
+            {"sharpening", sharpening},
+            {"cropBasis",
+             QJsonArray{cropBasis.x(), cropBasis.y(), cropBasis.width(), cropBasis.height()}},
             {"capped", capped},
             {"automatic", automatic},
             {"approved", approved},
@@ -18,6 +22,7 @@ QJsonObject Settings::json() const {
             {"quality", quality},
             {"rotation", rotation},
             {"headroom", headroom},
+            {"cropZoom", cropZoom},
             {"brightness", brightness},
             {"feather", feather},
             {"background", background},
@@ -53,6 +58,8 @@ Settings Settings::fromJson(const QJsonObject &j) {
             v = j[k].toString();
     };
     b("autoCrop", s.autoCrop);
+    b("sharpenScreen", s.sharpenScreen);
+    t("sharpening", s.sharpening);
     b("capped", s.capped);
     b("automatic", s.automatic);
     b("approved", s.approved);
@@ -61,6 +68,7 @@ Settings Settings::fromJson(const QJsonObject &j) {
     n("quality", s.quality);
     n("rotation", s.rotation);
     d("headroom", s.headroom);
+    d("cropZoom", s.cropZoom);
     d("brightness", s.brightness);
     d("feather", s.feather);
     t("background", s.background);
@@ -76,6 +84,14 @@ Settings Settings::fromJson(const QJsonObject &j) {
     auto a = j["crop"].toArray();
     if (a.size() == 4)
         s.crop = QRectF(a[0].toDouble(), a[1].toDouble(), a[2].toDouble(), a[3].toDouble());
+    auto basis = j["cropBasis"].toArray();
+    if (basis.size() == 4)
+        s.cropBasis = QRectF(basis[0].toDouble(), basis[1].toDouble(), basis[2].toDouble(),
+                             basis[3].toDouble());
+    // Older sessions stored magnification only through crop geometry. Keep
+    // their saved manual frame as the 100% baseline in the new range.
+    if (!j.contains("cropZoom") && !s.crop.isNull())
+        s.cropBasis = s.crop;
     s.strokes = j["strokes"].toArray();
     s.validate();
     return s;
@@ -90,6 +106,17 @@ void Settings::validate() const {
     check((width == 0 && height == 0) || (width >= 3 && height >= 4 && width % 3 == 0 &&
                                           height % 4 == 0 && width / 3 == height / 4),
           "Size must be exact 3:4 (for example 360x480); use 0x0 for source size");
+    check(QStringList{"low", "standard", "high"}.contains(sharpening),
+          "Unknown screen sharpening level");
+    if (!cropBasis.isNull())
+        check(std::isfinite(cropBasis.x()) && std::isfinite(cropBasis.y()) &&
+                  std::isfinite(cropBasis.width()) && std::isfinite(cropBasis.height()) &&
+                  cropBasis.x() >= 0 && cropBasis.y() >= 0 && cropBasis.width() > 0 &&
+                  cropBasis.height() > 0 && cropBasis.right() <= 1.000001 &&
+                  cropBasis.bottom() <= 1.000001,
+              "Crop zoom baseline must be inside the source image");
+    check(std::isfinite(cropZoom) && cropZoom >= 40 && cropZoom <= 100,
+          "Crop zoom must be 40–100%");
     check(quality >= 1 && quality <= 100, "JPEG quality must be 1–100");
     check(std::isfinite(headroom) && headroom >= 0 && headroom <= .25, "Headroom must be 0–25%");
     check(std::isfinite(brightness) && std::abs(brightness) <= 1, "Brightness must be -1 to 1");

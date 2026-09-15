@@ -1,8 +1,8 @@
 #include "controller.h"
+#include "fonts.h"
 #include <QCommandLineParser>
 #include <QDir>
 #include <QFile>
-#include <QFontDatabase>
 #include <QGuiApplication>
 #include <QIcon>
 #include <QJsonDocument>
@@ -109,6 +109,8 @@ int main(int argc, char **argv) {
                   {"background", "off, fast, quality", "method"},
                   {"background-color", "JPEG backdrop, e.g. #ffffff", "color"},
                   {"format", "jpeg or png", "format"},
+                  {"screen-sharpening",
+                   "Screen output sharpening: off, low, standard (default), high", "level"},
                   {"quality", "JPEG quality 1–100", "number"},
                   {"prefix", "Output filename prefix", "text"},
                   {"recursive", "Import nested folders"},
@@ -171,6 +173,12 @@ int main(int argc, char **argv) {
                               {"white-balance", "whiteBalance"}})
                 if (p.isSet(pair.first))
                     j[pair.second] = p.value(pair.first);
+            if (p.isSet("screen-sharpening")) {
+                const auto level = p.value("screen-sharpening");
+                j["sharpenScreen"] = level != "off";
+                if (level != "off")
+                    j["sharpening"] = level;
+            }
             if (p.isSet("no-auto-crop"))
                 j["autoCrop"] = false;
             if (p.isSet("fully-automatic"))
@@ -224,10 +232,7 @@ int main(int argc, char **argv) {
                 writeReport(p.value("report"), report);
             return interrupted ? 130 : (held || failed ? 2 : 0);
         }
-        QFontDatabase::addApplicationFont(":/assets/fonts/Inter.ttf");
-        QFontDatabase::addApplicationFont(":/assets/fonts/SpaceGrotesk.ttf");
-        QFontDatabase::addApplicationFont(":/assets/fonts/GeistMono.ttf");
-        QGuiApplication::setFont(QFont("Inter", 10));
+        loadWorkspaceFonts();
         QGuiApplication::setWindowIcon(QIcon(":/assets/gibbonpfp.png"));
         QQuickStyle::setStyle("Fusion");
         QQmlApplicationEngine qml;

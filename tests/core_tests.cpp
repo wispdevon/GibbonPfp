@@ -14,6 +14,73 @@ using namespace gibbon;
 class CoreTests : public QObject {
     Q_OBJECT
   private slots:
+    void relativeZoom() {
+        const QRectF initial(.3, .25, .3, .3);
+        const double headroom = .08;
+        const QPointF anchor(initial.center().x(), initial.y() + headroom * initial.height());
+        QCOMPARE(Engine::zoomCrop(initial, anchor, 100, headroom), initial);
+        auto wider = Engine::zoomCrop(initial, anchor, 50, headroom);
+        QCOMPARE(wider.width(), .6);
+        QVERIFY(qAbs((anchor.y() - wider.y()) / wider.height() - headroom) < 1e-8);
+        auto moreHeadroom = Engine::zoomCrop(initial, anchor, 50, .2);
+        QCOMPARE(moreHeadroom.size(), wider.size());
+        QVERIFY(moreHeadroom.y() < wider.y());
+        QVERIFY(qAbs((anchor.y() - moreHeadroom.y()) / moreHeadroom.height() - .2) < 1e-8);
+        auto bounded = Engine::zoomCrop(initial, QPointF(.99, .01), 40, .25);
+        QVERIFY(bounded.left() >= 0 && bounded.top() >= 0 && bounded.right() <= 1 &&
+                bounded.bottom() <= 1);
+        for (double invalid : {0., 39., 101., 400.})
+            QVERIFY_EXCEPTION_THROWN(Engine::zoomCrop(initial, anchor, invalid, headroom),
+                                     std::runtime_error);
+    }
+    void screenSharpening() {
+        cv::Mat flat(40, 30, CV_32FC3, cv::Scalar(.4, .4, .4));
+        cv::Mat alpha(40, 30, CV_32F, cv::Scalar(1));
+        QCOMPARE(cv::norm(flat, Engine::sharpenForScreen(flat, alpha, "high"), cv::NORM_INF), 0.);
+        cv::Mat edge = flat.clone();
+        edge.colRange(15, 30).setTo(cv::Scalar(.6, .6, .6));
+        double previous = 0;
+        for (const auto *level : {"low", "standard", "high"}) {
+            auto sharp = Engine::sharpenForScreen(edge, alpha, level);
+            double change = cv::norm(edge, sharp, cv::NORM_L1);
+            QVERIFY(change > previous);
+            previous = change;
+            QVERIFY(sharp.at<cv::Vec3f>(20, 14)[0] < .4f);
+            QVERIFY(sharp.at<cv::Vec3f>(20, 15)[0] > .6f);
+        }
+        // Hidden RGB must not create a fringe in the visible, constant-color area.
+        alpha.colRange(15, 30).setTo(0);
+        auto sharp = Engine::sharpenForScreen(edge, alpha, "high");
+        QVERIFY(cv::norm(edge, sharp, cv::NORM_INF) < 1e-6);
+        std::atomic_bool cancelled{true};
+        QVERIFY_EXCEPTION_THROWN(Engine::sharpenForScreen(edge, alpha, "standard", &cancelled),
+                                 std::runtime_error);
+        QTemporaryDir dir;
+        QImage image(60, 80, QImage::Format_RGB32);
+        for (int y = 0; y < 80; ++y)
+            for (int x = 0; x < 60; ++x)
+                image.setPixelColor(
+                    x, y, QColor(x < 30 ? 100 : 160, x < 30 ? 100 : 160, x < 30 ? 100 : 160));
+        auto path = dir.filePath("edge.png");
+        QVERIFY(image.save(path));
+        Settings settings;
+        settings.autoCrop = false;
+        settings.format = "png";
+        QVERIFY(settings.sharpenScreen);
+        QCOMPARE(Settings::fromJson(settings.json()).sharpening, "standard");
+        Engine engine;
+        auto on = engine.process(path, settings);
+        settings.sharpenScreen = false;
+        auto off = engine.process(path, settings);
+        QCOMPARE(on.outputSize, off.outputSize);
+        QCOMPARE(on.preview, QImage::fromData(on.encoded));
+        QVERIFY(on.preview != off.preview);
+        QCOMPARE(on.mask, off.mask);
+        auto invalid = settings.json();
+        invalid["sharpening"] = "ultra";
+        QVERIFY_EXCEPTION_THROWN(Settings::fromJson(invalid), std::runtime_error);
+    }
+
     void smallWorkerStack() {
         QTemporaryDir dir;
         QImage image(60, 80, QImage::Format_RGB888);

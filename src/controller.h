@@ -64,6 +64,7 @@ class Controller : public QObject {
     void setDark(bool dark);
     void setCurrent(int value);
     Q_INVOKABLE void add(const QList<QUrl> &urls, bool recursive = false);
+    Q_INVOKABLE void loadSample();
     Q_INVOKABLE void set(const QString &key, const QVariant &value);
     Q_INVOKABLE void setSize(int width, int height);
     Q_INVOKABLE void setReference(const QUrl &url) {
@@ -89,6 +90,7 @@ class Controller : public QObject {
     Q_INVOKABLE QString modelDescription() const;
     Q_INVOKABLE void installModel(const QString &id);
     Q_INVOKABLE void setCrop(double x, double y, double width, double height);
+    Q_INVOKABLE void setCropZoom(double percent);
     Q_INVOKABLE void nudgeCrop(double dx, double dy);
     Q_INVOKABLE void stroke(const QVariantList &points, bool keep, double radius);
   signals:

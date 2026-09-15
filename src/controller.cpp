@@ -9,6 +9,7 @@
 #include <QJsonDocument>
 #include <QSaveFile>
 #include <QSettings>
+#include <QStandardPaths>
 #include <QStyleHints>
 #include <QtConcurrent>
 
@@ -118,6 +119,30 @@ void Controller::add(const QList<QUrl> &urls, bool recursive) {
     if (index >= 0)
         preview();
 }
+void Controller::loadSample() {
+    if (working)
+        return;
+    const auto directory = QStandardPaths::writableLocation(QStandardPaths::CacheLocation);
+    if (!QDir().mkpath(directory)) {
+        fail("Could not create the sample image directory");
+        return;
+    }
+    const auto path = directory + "/gibbon-sample.png";
+    QSaveFile file(path);
+    const auto data = Engine::samplePortrait();
+    if (!file.open(QIODevice::WriteOnly) || file.write(data) != data.size() || !file.commit()) {
+        fail("Could not save the sample image");
+        return;
+    }
+    for (int i = 0; i < queue.size(); ++i)
+        if (queue[i].path == path) {
+            setCurrent(i);
+            return;
+        }
+    const int row = queue.size();
+    queue.push_back({path});
+    setCurrent(row);
+}
 void Controller::remember() {
     if (index >= 0) {
         auto &q = queue[index];
@@ -135,8 +160,23 @@ void Controller::set(const QString &key, const QVariant &value) {
         auto j = queue[index].settings.json();
         j[key] = QJsonValue::fromVariant(value);
         auto s = Settings::fromJson(j);
-        if (QStringList{"crop", "rotation", "autoCrop", "headroom"}.contains(key))
+        if (QStringList{"crop", "cropZoom", "rotation", "autoCrop", "headroom"}.contains(key))
             s.strokes = {};
+        if (QStringList{"rotation", "autoCrop", "headroom"}.contains(key) ||
+            (key == "crop" && s.crop.isNull())) {
+            s.cropBasis = {};
+            s.crop = {};
+        }
+        if (key == "cropZoom") {
+            // Recalculate an automatic frame in the engine, with the real head anchor.
+            // For a manually moved frame, use its current headroom anchor instead.
+            if (!s.crop.isNull() && !s.cropBasis.isEmpty() && !details.isEmpty())
+                s.crop = Engine::zoomCrop(
+                    s.cropBasis,
+                    QPointF(details["cropX"].toDouble() + details["cropW"].toDouble() / 2,
+                            details["cropY"].toDouble() + s.headroom * details["cropH"].toDouble()),
+                    s.cropZoom, s.headroom);
+        }
         remember();
         s.approved = false;
         queue[index].settings = s;
@@ -147,6 +187,12 @@ void Controller::set(const QString &key, const QVariant &value) {
 }
 void Controller::setCrop(double x, double y, double w, double h) {
     set("crop", QVariantList{x, y, w, h});
+    preview();
+}
+void Controller::setCropZoom(double percent) {
+    if (working || index < 0 || details.isEmpty())
+        return;
+    set("cropZoom", percent);
     preview();
 }
 void Controller::nudgeCrop(double dx, double dy) {
@@ -211,8 +257,12 @@ void Controller::applySelected() {
             auto &q = queue[i];
             q.history.push_back(q.settings);
             auto crop = q.settings.crop;
+            auto basis = q.settings.cropBasis;
+            auto zoom = q.settings.cropZoom;
             q.settings = s;
             q.settings.crop = crop;
+            q.settings.cropBasis = basis;
+            q.settings.cropZoom = zoom;
             q.settings.strokes = {};
             q.settings.approved = false;
             q.state = "Edited";
@@ -247,6 +297,7 @@ void Controller::fail(const QString &e) {
 }
 void Controller::showResult(const Result &r, int row) {
     auto &q = queue[row];
+    q.settings.cropBasis = r.cropBasis;
     q.warnings = r.warnings;
     q.error.clear();
     q.state = r.review ? "Needs review" : "Ready";
@@ -264,6 +315,7 @@ void Controller::showResult(const Result &r, int row) {
                    {"cropY", r.crop.y()},
                    {"cropW", r.crop.width()},
                    {"cropH", r.crop.height()},
+                   {"cropZoom", q.settings.cropZoom},
                    {"review", r.review},
                    {"warnings", r.warnings.join(" · ")},
                    {"bytes", r.encodedBytes},
@@ -474,6 +526,7 @@ void Controller::savePreset(const QUrl &u) {
     try {
         auto s = queue[index].settings;
         s.crop = {};
+        s.cropBasis = {};
         s.strokes = {};
         s.approved = false;
         s.reference.clear();

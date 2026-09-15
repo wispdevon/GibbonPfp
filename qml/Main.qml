@@ -38,9 +38,19 @@ ApplicationWindow {
     Overlay.overlay.transform: Scale { xScale: backend.uiScale / 100; yScale: backend.uiScale / 100 }
     font.family: "Inter"
     font.pixelSize: 13
+    font.weight: Font.Medium
 
+    component WorkLabel: Label { font.family: "Inter"; font.weight: Font.Medium }
+    component WorkCheckBox: CheckBox { font.family: "Inter"; font.weight: Font.Medium }
+    component WorkMenuItem: MenuItem { font.family: "Inter"; font.weight: Font.Medium }
+    component WorkDialog: Dialog {
+        id: workDialog
+        font.family: "Inter"; font.weight: Font.Medium
+        header: WorkLabel { text: workDialog.title; padding: 12; font.family: "Space Grotesk"; font.pixelSize: 16; font.weight: Font.Bold; color: ink }
+    }
     component Action: Button {
         id: action
+        font.family: "Inter"; font.weight: Font.DemiBold
         property bool primary: false
         implicitHeight: 40
         leftPadding: 14; rightPadding: 14
@@ -49,11 +59,22 @@ ApplicationWindow {
         contentItem: Text { text: action.text; font: action.font; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; color: action.primary ? (backend.dark ? "#17181b" : "white") : ink; opacity: action.enabled ? 1 : 0.45 }
         background: Rectangle { radius: 8; color: action.primary ? (action.down ? Qt.darker(accent, 1.2) : action.hovered ? Qt.lighter(accent, 1.15) : accent) : action.down ? strong : action.hovered ? strong : panel; border.color: action.activeFocus || action.hovered ? accent : muted; border.width: action.activeFocus ? 2 : 1; opacity: action.enabled ? 1 : .6 }
     }
-    component Caption: Label { color: ink; font.family: "Space Grotesk"; font.pixelSize: 16; font.weight: Font.Bold }
-    component FieldLabel: Label { Layout.fillWidth: true; color: ink; font.pixelSize: 12; wrapMode: Text.WordWrap }
+    component Caption: WorkLabel { color: ink; font.family: "Space Grotesk"; font.pixelSize: 16; font.weight: Font.Bold }
+    component FieldLabel: WorkLabel { Layout.fillWidth: true; color: ink; font.pixelSize: 12; wrapMode: Text.WordWrap }
     component Rule: Rectangle { Layout.fillWidth: true; height: 2; color: line }
-    component Entry: TextField { implicitHeight: 38; color: ink; placeholderTextColor: muted; selectByMouse: true; font.pixelSize: 12; background: Rectangle { color: panel; radius: 8; border.color: parent.activeFocus ? accent : line } }
-    component Choice: ComboBox { implicitHeight: 38; font.pixelSize: 12; palette.button: panel; palette.text: ink; palette.buttonText: ink; background: Rectangle { color: panel; radius: 8; border.color: parent.activeFocus ? accent : line } }
+    component Entry: TextField { font.family: "Inter"; font.weight: Font.Medium; implicitHeight: 38; color: ink; placeholderTextColor: muted; selectByMouse: true; font.pixelSize: 12; background: Rectangle { color: panel; radius: 8; border.color: parent.activeFocus ? accent : line } }
+    component Choice: ComboBox {
+        id: choice
+        font.family: "Inter"; font.weight: Font.Medium
+        delegate: ItemDelegate {
+            objectName: "choiceDelegate"
+            required property int index
+            required property var modelData
+            width: choice.width; text: modelData; font: choice.font
+            highlighted: choice.highlightedIndex === index
+            contentItem: Text { text: parent.text; font: choice.font; color: parent.highlighted ? win.palette.highlightedText : ink; elide: Text.ElideRight; verticalAlignment: Text.AlignVCenter }
+        }
+        implicitHeight: 38; font.pixelSize: 12; palette.button: panel; palette.text: ink; palette.buttonText: ink; background: Rectangle { color: panel; radius: 8; border.color: parent.activeFocus ? accent : line } }
 
     Item {
         id: workspace
@@ -77,15 +98,16 @@ ApplicationWindow {
                     Text { anchors.centerIn: parent; text: "g"; font.family: "Space Grotesk"; font.pixelSize: 34; font.weight: Font.Bold; color: backend.dark ? bg : panel }
                 }
                 ColumnLayout { spacing: 1
-                    Label { text: "GibbonPfp"; font.family: "Space Grotesk"; font.pixelSize: 26; font.weight: Font.Bold; color: ink }
+                    WorkLabel { text: "GibbonPfp"; font.family: "Space Grotesk"; font.pixelSize: 26; font.weight: Font.Bold; color: ink }
                     Caption { text: "PORTRAIT WORKSPACE"; font.pixelSize: 9 }
                 }
                 Item { Layout.fillWidth: true }
+                Action { text: "Load sample"; objectName: "loadSample"; enabled: !backend.busy; onClicked: backend.loadSample() }
                 Action { text: "Workspace"; onClicked: workspaceMenu.popup()
                     Menu { id: workspaceMenu
-                        MenuItem { text: "Open session…"; enabled: !backend.busy; onTriggered: {fileAction="loadSession";jsonOpen.open()} }
-                        MenuItem { text: "Save session…"; enabled: hasPhoto&&!backend.busy; onTriggered: {fileAction="saveSession";jsonSave.open()} }
-                        MenuItem { text: "Models…"; enabled: !backend.busy; onTriggered: modelDialog.open() }
+                        WorkMenuItem { text: "Open session…"; enabled: !backend.busy; onTriggered: {fileAction="loadSession";jsonOpen.open()} }
+                        WorkMenuItem { text: "Save session…"; enabled: hasPhoto&&!backend.busy; onTriggered: {fileAction="saveSession";jsonSave.open()} }
+                        WorkMenuItem { text: "Models…"; enabled: !backend.busy; onTriggered: modelDialog.open() }
                     }
                 }
                 Action { text: "Appearance"; onClicked: appearanceDialog.open() }
@@ -95,8 +117,8 @@ ApplicationWindow {
         RowLayout {
             Layout.fillWidth: true; Layout.margins: compact ? 12 : 20; Layout.bottomMargin: 10; spacing: 10
             ColumnLayout { visible: workspace.width >= 900; spacing: 3
-                Label { text: "A good first impression."; font.family: "Space Grotesk"; font.pixelSize: 23; font.weight: Font.Bold; color: ink }
-                Label { text: "Frame, refine, and export your portraits. All on your device."; color: muted; font.pixelSize: 12 }
+                WorkLabel { text: "A good first impression."; font.family: "Space Grotesk"; font.pixelSize: 23; font.weight: Font.Bold; color: ink }
+                WorkLabel { text: "Frame, refine, and export your portraits. All on your device."; color: muted; font.pixelSize: 12 }
             }
             Item { Layout.fillWidth: true }
             Action { text: queueOpen ? "Hide queue" : "Queue"; onClicked: {queueOpen=!queueOpen;if(queueOpen&&workspace.width<1100)adjustmentsOpen=false} }
@@ -110,7 +132,7 @@ ApplicationWindow {
                 visible: queueOpen; Layout.preferredWidth: 235; Layout.fillHeight: true; radius: 12; color: panel; border.color: line
                 ColumnLayout {
                     anchors.fill: parent; anchors.margins: 14; spacing: 12
-                    RowLayout { Layout.fillWidth: true; Caption { text: "Photo queue" } Item {Layout.fillWidth: true} Label { text: backend.items.length.toString().padStart(2,"0"); color: muted; font.family: "Geist Mono"; font.pixelSize: 13 } }
+                    RowLayout { Layout.fillWidth: true; Caption { text: "Photo queue" } Item {Layout.fillWidth: true} WorkLabel { text: backend.items.length.toString().padStart(2,"0"); color: muted; font.family: "Geist Mono"; font.pixelSize: 13 } }
                     Choice { Layout.fillWidth: true; model: ["All photos", "Needs review", "Ready", "Failed", "Exported"]; onActivated: win.filter=currentText }
                     ListView {
                         id: photoList; Layout.fillWidth: true; Layout.fillHeight: true; clip: true; spacing: 6; model: backend.items
@@ -124,19 +146,19 @@ ApplicationWindow {
                             MouseArea { anchors.fill: parent; enabled: !backend.busy; onClicked: backend.current=parent.index }
                             RowLayout {
                                 anchors.fill: parent; anchors.margins: 7; spacing: 7
-                                CheckBox { checked: modelData.selected; implicitWidth: 26; enabled: !backend.busy; Accessible.name: "Select "+modelData.name; onClicked: backend.select(index,checked) }
+                                WorkCheckBox { checked: modelData.selected; implicitWidth: 26; enabled: !backend.busy; Accessible.name: "Select "+modelData.name; onClicked: backend.select(index,checked) }
                                 Rectangle { width: 39; height: 52; radius: 4; color: bg; clip: true
-                                    Label { anchors.centerIn: parent; text: "3:4"; color: muted; font.pixelSize: 10 }
+                                    WorkLabel { anchors.centerIn: parent; text: "3:4"; color: muted; font.pixelSize: 10 }
                                     Image { anchors.fill: parent; source: modelData.state!=="Imported" ? modelData.thumb : ""; fillMode: Image.PreserveAspectCrop; cache: false }
                                 }
                                 ColumnLayout { Layout.fillWidth: true; spacing: 5
-                                    Label { text: modelData.name; Layout.fillWidth: true; elide: Text.ElideMiddle; color: ink; font.pixelSize: 11; font.weight: Font.DemiBold }
-                                    Label { text: modelData.state; color: modelData.state==="Needs review" ? (backend.dark?"#e5bb75":"#886015") : muted; font.pixelSize: 10 }
+                                    WorkLabel { text: modelData.name; Layout.fillWidth: true; elide: Text.ElideMiddle; color: ink; font.pixelSize: 11; font.weight: Font.DemiBold }
+                                    WorkLabel { text: modelData.state; color: modelData.state==="Needs review" ? (backend.dark?"#e5bb75":"#886015") : muted; font.pixelSize: 10 }
                                 }
                             }
                         }
                     }
-                    Label { visible: backend.items.length===0; text: "Your photos will appear here."; color: muted; font.pixelSize: 11; Layout.fillWidth: true; wrapMode: Text.WordWrap }
+                    WorkLabel { visible: backend.items.length===0; text: "Your photos will appear here."; color: muted; font.pixelSize: 11; Layout.fillWidth: true; wrapMode: Text.WordWrap }
                     Action { text: "Prepare selected"; Layout.fillWidth: true; enabled: hasPhoto&&!backend.busy; onClicked: backend.batch("",false) }
                     Action { text: "Remove selected"; Layout.fillWidth: true; enabled: hasPhoto&&!backend.busy; onClicked: backend.removeSelected() }
                 }
@@ -197,7 +219,7 @@ ApplicationWindow {
                                     }
                                 }
                             }
-                            Label { anchors.centerIn: parent; width: parent.width-24; visible: !outputUrl; text: "Drop portraits here"; horizontalAlignment: Text.AlignHCenter; wrapMode: Text.WordWrap; color: muted }
+                            WorkLabel { anchors.centerIn: parent; width: parent.width-24; visible: !outputUrl; text: "Drop portraits here"; horizontalAlignment: Text.AlignHCenter; wrapMode: Text.WordWrap; color: muted }
                             DropArea { anchors.fill: parent; onDropped: drop => {if(drop.hasUrls&&!backend.busy)backend.add(drop.urls,true)} }
                         }
                     }
@@ -229,11 +251,11 @@ ApplicationWindow {
                                     onCanceled: points=[]
                                 }
                             }
-                            Label { anchors.centerIn: parent; visible: !outputUrl; text: "Export preview"; color: muted }
+                            WorkLabel { anchors.centerIn: parent; visible: !outputUrl; text: "Export preview"; color: muted }
                             Rectangle { anchors.fill: parent; visible: backend.busy; color: backend.dark ? "#aa151617" : "#aaefece6"
                                 Column { anchors.centerIn: parent; spacing: 8
                                     BusyIndicator { anchors.horizontalCenter: parent.horizontalCenter; running: backend.busy }
-                                    Label { text: "Updating…"; color: ink }
+                                    WorkLabel { text: "Updating…"; color: ink }
                                 }
                             }
                         }
@@ -241,7 +263,7 @@ ApplicationWindow {
                 }
                 RowLayout {
                     Layout.fillWidth: true
-                    Label { text: backend.result.width ? backend.result.width+" × "+backend.result.height+" px · "+Math.round((backend.result.bytes||0)/1024)+" KB" : "360 × 480 px · 3:4 portrait"; font.family: "Geist Mono"; color: muted; font.pixelSize: 11; Layout.fillWidth: true; elide: Text.ElideRight }
+                    WorkLabel { text: backend.result.width ? backend.result.width+" × "+backend.result.height+" px · "+Math.round((backend.result.bytes||0)/1024)+" KB" : "360 × 480 px · 3:4 portrait"; font.family: "Geist Mono"; color: muted; font.pixelSize: 11; Layout.fillWidth: true; elide: Text.ElideRight }
                     Action { text: "Undo"; enabled: hasPhoto&&!backend.busy; onClicked: backend.undo() }
                     Action { text: "Reset"; enabled: hasPhoto&&!backend.busy; onClicked: backend.reset() }
                 }
@@ -249,7 +271,7 @@ ApplicationWindow {
                     Layout.fillWidth: true; spacing: 8
                     Rectangle {
                         Layout.fillWidth: true; implicitHeight: reviewText.implicitHeight+16; radius: 8; color: panel; border.color: line
-                        Label { id: reviewText; anchors.fill: parent; anchors.margins: 8; text: backend.result.warnings || "Auto-crop aims for 8% headroom. Adjust framing to suit your portrait."; color: muted; wrapMode: Text.WordWrap; font.pixelSize: 11; maximumLineCount: compact ? 2 : 4; elide: Text.ElideRight
+                        WorkLabel { id: reviewText; anchors.fill: parent; anchors.margins: 8; text: backend.result.warnings || ("Requested headroom: "+Math.round(backend.settings.headroom*100)+"% · Crop zoom: "+Math.round(backend.settings.cropZoom||100)+"%. Drag the frame to adjust placement."); color: muted; wrapMode: Text.WordWrap; font.pixelSize: 11; maximumLineCount: compact ? 2 : 4; elide: Text.ElideRight
                             ToolTip.visible: warningHover.hovered
                             ToolTip.text: text
                             HoverHandler { id: warningHover }
@@ -267,20 +289,24 @@ ApplicationWindow {
                     ColumnLayout {
                         width: adjustmentsScroll.availableWidth; spacing: 13; enabled: hasPhoto&&!backend.busy
                         Caption { text: "01 / Frame" }
-                        CheckBox { text: "Automatic portrait crop"; checked: backend.settings.autoCrop; onClicked: {backend.set("autoCrop",checked);backend.set("crop",[0,0,0,0]);backend.preview()} }
-                        RowLayout { Layout.fillWidth: true; FieldLabel { text: "Headroom" } Item {Layout.fillWidth: true} Label { text: Math.round(backend.settings.headroom*100)+"%"; color: muted; font.family: "Geist Mono"; font.pixelSize: 11 } }
-                        Slider { Layout.fillWidth: true; enabled: backend.settings.autoCrop; from: 0; to: .25; stepSize: .01; value: backend.settings.headroom; Accessible.name: "Headroom"; onMoved: backend.set("headroom",value); onPressedChanged: if(!pressed){backend.set("crop",[0,0,0,0]);backend.preview()} }
-                        FieldLabel { text: "Crop zoom · drag or use arrow keys on the left" }
-                        Slider { Layout.fillWidth: true; from: 1; to: 4; value: 1; Accessible.name: "Crop zoom"; onPressedChanged: if(!pressed&&backend.result.sourceWidth){let r=backend.result;let h=Math.min(r.sourceHeight,r.sourceWidth/0.75)/value;let w=h*.75;let nw=w/r.sourceWidth;let nh=h/r.sourceHeight;backend.setCrop(Math.max(0,Math.min(1-nw,r.cropX+r.cropW/2-nw/2)),Math.max(0,Math.min(1-nh,r.cropY+r.cropH/2-nh/2)),nw,nh)} }
+                        WorkCheckBox { text: "Automatic portrait crop"; checked: backend.settings.autoCrop; onClicked: {backend.set("autoCrop",checked);backend.preview()} }
+                        RowLayout { Layout.fillWidth: true; FieldLabel { text: "Headroom" } Item {Layout.fillWidth: true} WorkLabel { text: Math.round(backend.settings.headroom*100)+"%"; color: muted; font.family: "Geist Mono"; font.pixelSize: 11 } }
+                        Slider { Layout.fillWidth: true; enabled: backend.settings.autoCrop; from: 0; to: .25; stepSize: .01; value: backend.settings.headroom; Accessible.name: "Headroom"; onMoved: {backend.set("headroom",value);if(!pressed)backend.preview()} onPressedChanged: if(!pressed)backend.preview() }
                         RowLayout { Layout.fillWidth: true
-                            Action { text: "Rotate ↶"; Layout.fillWidth: true; onClicked: {backend.set("rotation",backend.settings.rotation-90);backend.set("crop",[0,0,0,0]);backend.preview()} }
-                            Action { text: "Rotate ↷"; Layout.fillWidth: true; onClicked: {backend.set("rotation",backend.settings.rotation+90);backend.set("crop",[0,0,0,0]);backend.preview()} }
+                            FieldLabel { text: "Crop zoom" }
+                            WorkLabel { objectName: "cropZoomPercent"; text: Math.round(cropZoom.pressed ? cropZoom.value : (backend.settings.cropZoom||100))+"%"; color: ink; font.family: "Geist Mono"; font.pixelSize: 12 }
+                        }
+                        Slider { id: cropZoom; objectName: "cropZoom"; Layout.fillWidth: true; from: 40; to: 100; stepSize: 1; value: backend.settings.cropZoom||100; Accessible.name: "Crop zoom percentage"; onMoved: if(!pressed)backend.setCropZoom(value); onPressedChanged: if(!pressed)backend.setCropZoom(value) }
+                        WorkLabel { text: "40% is wider; 100% is the automatic crop. Headroom applies at every zoom."; Layout.fillWidth: true; wrapMode: Text.WordWrap; color: muted; font.pixelSize: 11 }
+                        RowLayout { Layout.fillWidth: true
+                            Action { text: "Rotate ↶"; Layout.fillWidth: true; onClicked: {backend.set("rotation",backend.settings.rotation-90);backend.preview()} }
+                            Action { text: "Rotate ↷"; Layout.fillWidth: true; onClicked: {backend.set("rotation",backend.settings.rotation+90);backend.preview()} }
                         }
                         Rule {}
                         Caption { text: "02 / Refine" }
-                        RowLayout { Layout.fillWidth: true; FieldLabel { text: "Perceived brightness" } Item {Layout.fillWidth: true} Label { text: Number(backend.settings.brightness).toFixed(2); color: muted; font.family: "Geist Mono"; font.pixelSize: 11 } }
+                        RowLayout { Layout.fillWidth: true; FieldLabel { text: "Perceived brightness" } Item {Layout.fillWidth: true} WorkLabel { text: Number(backend.settings.brightness).toFixed(2); color: muted; font.family: "Geist Mono"; font.pixelSize: 11 } }
                         Slider { objectName: "brightnessSlider"; Layout.fillWidth: true; from: -1; to: 1; stepSize: .02; value: backend.settings.brightness; Accessible.name: "Perceptual brightness"; onMoved: backend.set("brightness",value); onPressedChanged: if(!pressed)backend.preview() }
-                        Label { text: "Gentle midtone adjustment with protected black and white endpoints."; color: muted; Layout.fillWidth: true; wrapMode: Text.WordWrap; font.pixelSize: 10 }
+                        WorkLabel { text: "Gentle midtone adjustment with protected black and white endpoints."; color: muted; Layout.fillWidth: true; wrapMode: Text.WordWrap; font.pixelSize: 10 }
                         RowLayout { Layout.fillWidth: true; Action { text: backend.settings.reference ? "Change reference" : "Match reference…"; Layout.fillWidth: true; onClicked: referencePhoto.open() } Action { text: "Clear"; visible: !!backend.settings.reference; onClicked: {backend.set("reference","");backend.preview()} } }
                         FieldLabel { text: "Background removal" }
                         Choice { Layout.fillWidth: true; model: ["Off · keep original", "Fast · lightweight", "High Quality · portrait"]; currentIndex: ["off","fast","quality"].indexOf(backend.settings.background); onActivated: {backend.set("background",["off","fast","quality"][currentIndex]);backend.preview()} }
@@ -301,15 +327,18 @@ ApplicationWindow {
                         }
                         Rule {}
                         Caption { text: "03 / Export" }
-                        CheckBox { text: "Limit to 360 × 480"; checked: backend.settings.capped; onClicked: {backend.set("capped",checked);backend.setSize(0,0);backend.preview()} }
+                        WorkCheckBox { objectName: "sharpenScreen"; text: "Sharpen for screen"; checked: backend.settings.sharpenScreen; onClicked: {backend.set("sharpenScreen",checked);backend.preview()} }
+                        Choice { objectName: "sharpeningLevel"; Layout.fillWidth: true; enabled: backend.settings.sharpenScreen; model: ["Low", "Standard", "High"]; currentIndex: ["low","standard","high"].indexOf(backend.settings.sharpening); Accessible.name: "Screen sharpening level"; onActivated: {backend.set("sharpening",currentText.toLowerCase());backend.preview()} }
+
+                        WorkCheckBox { text: "Limit to 360 × 480"; checked: backend.settings.capped; onClicked: {backend.set("capped",checked);backend.setSize(0,0);backend.preview()} }
                         Choice { visible: !backend.settings.capped; Layout.fillWidth: true; model: ["Source crop size", "720 × 960", "1080 × 1440", "Custom…"]; currentIndex: backend.settings.width===0?0:backend.settings.width===720?1:backend.settings.width===1080?2:3; onActivated: {if(currentIndex===3)sizeDialog.open();else{let n=[0,240,360][currentIndex];backend.setSize(n*3,n*4);backend.preview()}} }
                         Choice { Layout.fillWidth: true; model: ["JPEG · solid background", "PNG · transparency"]; currentIndex: backend.settings.format==="png"?1:0; onActivated: {backend.set("format",currentIndex===0?"jpeg":"png");backend.preview()} }
                         RowLayout { visible: backend.settings.format==="jpeg"; Layout.fillWidth: true; FieldLabel { text: "Backdrop" } Action { text: backend.settings.backgroundColor; Layout.fillWidth: true; onClicked: backdrop.open() } }
                         FieldLabel { visible: backend.settings.format==="jpeg"; text: "JPEG quality · "+backend.settings.quality }
                         Slider { visible: backend.settings.format==="jpeg"; Layout.fillWidth: true; from: 1; to: 100; stepSize: 1; value: backend.settings.quality; Accessible.name: "JPEG quality"; onMoved: backend.set("quality",value); onPressedChanged: if(!pressed)backend.preview() }
                         Entry { Layout.fillWidth: true; placeholderText: "Filename prefix (optional)"; text: backend.settings.prefix; Accessible.name: "Filename prefix"; onEditingFinished: backend.set("prefix",text) }
-                        CheckBox { text: "Fully automatic batch"; checked: backend.settings.automatic; onClicked: backend.set("automatic",checked) }
-                        Label { text: backend.settings.automatic ? "Uses the largest face or center crop. Warnings are recorded." : "Uncertain crops wait for your review."; Layout.fillWidth: true; wrapMode: Text.WordWrap; color: muted; font.pixelSize: 10 }
+                        WorkCheckBox { text: "Fully automatic batch"; checked: backend.settings.automatic; onClicked: backend.set("automatic",checked) }
+                        WorkLabel { text: backend.settings.automatic ? "Uses the largest face or center crop. Warnings are recorded." : "Uncertain crops wait for your review."; Layout.fillWidth: true; wrapMode: Text.WordWrap; color: muted; font.pixelSize: 10 }
                         Action { text: "Apply settings to selected"; Layout.fillWidth: true; onClicked: backend.applySelected() }
                         RowLayout { Layout.fillWidth: true; Action { text: "Load preset"; Layout.fillWidth: true; onClicked: {fileAction="loadPreset";jsonOpen.open()} } Action { text: "Save preset"; Layout.fillWidth: true; onClicked: {fileAction="savePreset";jsonSave.open()} } }
                     }
@@ -321,7 +350,7 @@ ApplicationWindow {
             Rectangle { width: parent.width; height: 1; color: line }
             RowLayout { anchors.fill: parent; anchors.margins: 16; spacing: 10
                 Rectangle { width: 7; height: 7; radius: 4; color: backend.busy ? "#bb934f" : "#819483" }
-                Label { text: backend.message; Layout.fillWidth: true; color: muted; font.pixelSize: 11; wrapMode: Text.WordWrap; maximumLineCount: 2; elide: Text.ElideRight }
+                WorkLabel { text: backend.message; Layout.fillWidth: true; color: muted; font.pixelSize: 11; wrapMode: Text.WordWrap; maximumLineCount: 2; elide: Text.ElideRight }
                 Action { visible: backend.busy; text: "Cancel"; onClicked: backend.cancel() }
                 Action { text: workspace.width < 900 ? "Refresh" : "Refresh preview"; enabled: hasPhoto&&!backend.busy; onClicked: backend.preview() }
                 Action { text: workspace.width < 900 ? "Export" : "Export current"; enabled: hasPhoto&&!backend.busy; onClicked: {folderAction="current";folders.open()} }
@@ -340,13 +369,13 @@ ApplicationWindow {
             }
         }
     }
-    Dialog {
+    WorkDialog {
         id: appearanceDialog; objectName: "appearanceDialog"; title: "Appearance"; anchors.centerIn: parent; modal: true; width: Math.min(380, workspace.width-32); standardButtons: Dialog.Close
         ColumnLayout { width: parent.width; spacing: 14
             FieldLabel { text: "Theme" }
             Choice { Layout.fillWidth: true; model: ["Light", "Dark"]; currentIndex: backend.dark ? 1 : 0; onActivated: backend.dark=currentIndex===1 }
             FieldLabel { text: "UI scale" }
-            Choice { Layout.fillWidth: true; model: ["80%", "90%", "100%", "110%", "125%", "150%"]; currentIndex: [80,90,100,110,125,150].indexOf(backend.uiScale); onActivated: backend.uiScale=[80,90,100,110,125,150][currentIndex] }
+            Choice { objectName: "appearanceScale"; Layout.fillWidth: true; model: ["80%", "90%", "100%", "110%", "125%", "150%"]; currentIndex: [80,90,100,110,125,150].indexOf(backend.uiScale); onActivated: backend.uiScale=[80,90,100,110,125,150][currentIndex] }
             FieldLabel { text: "Button accent" }
             Choice { Layout.fillWidth: true; model: ["Graphite", "Blue"]; currentIndex: backend.buttonAccent==="blue" ? 1 : 0; onActivated: backend.buttonAccent=currentIndex===1 ? "blue" : "graphite" }
         }
@@ -364,14 +393,14 @@ ApplicationWindow {
     FileDialog { id: jsonOpen; title: "Open "+(fileAction==="loadPreset"?"preset":"session"); nameFilters: ["JSON (*.json)"]; onAccepted: {if(fileAction==="loadPreset")backend.loadPreset(selectedFile);else backend.loadSession(selectedFile)} }
     FileDialog { id: jsonSave; title: "Save "+(fileAction==="savePreset"?"preset":"session"); fileMode: FileDialog.SaveFile; defaultSuffix: "json"; nameFilters: ["JSON (*.json)"]; onAccepted: {if(fileAction==="savePreset")backend.savePreset(selectedFile);else backend.saveSession(selectedFile)} }
     ColorDialog { id: backdrop; title: "JPEG background color"; onAccepted: {backend.set("backgroundColor",selectedColor.toString());backend.preview()} }
-    Dialog { id: sizeDialog; title: "Custom 3:4 size"; anchors.centerIn: parent; modal: true; standardButtons: Dialog.Ok|Dialog.Cancel
-        ColumnLayout { spacing: 12; Label { text: "Width (a multiple of 3). Height follows 3:4."; color: ink } SpinBox { id: customWidth; from: 3; to: 60000; stepSize: 3; value: 720; editable: true } Label { text: Math.floor(customWidth.value/3)*3+" × "+Math.floor(customWidth.value/3)*4+" px · never upscaled"; color: muted } }
+    WorkDialog { id: sizeDialog; title: "Custom 3:4 size"; anchors.centerIn: parent; modal: true; standardButtons: Dialog.Ok|Dialog.Cancel
+        ColumnLayout { spacing: 12; WorkLabel { text: "Width (a multiple of 3). Height follows 3:4."; color: ink } SpinBox { font.family: "Inter"; font.weight: Font.Medium; id: customWidth; from: 3; to: 60000; stepSize: 3; value: 720; editable: true } WorkLabel { text: Math.floor(customWidth.value/3)*3+" × "+Math.floor(customWidth.value/3)*4+" px · never upscaled"; color: muted } }
         onAccepted: {backend.setSize(Math.floor(customWidth.value/3)*3,Math.floor(customWidth.value/3)*4);backend.preview()}
     }
-    Dialog { id: modelDialog; title: "Local portrait models"; anchors.centerIn: parent; modal: true; width: 420; standardButtons: Dialog.Close
+    WorkDialog { id: modelDialog; title: "Local portrait models"; anchors.centerIn: parent; modal: true; width: 420; standardButtons: Dialog.Close
         ColumnLayout { width: parent.width; spacing: 16
-            Label { text: "Face detection and Fast are bundled. High Quality downloads 973 MB and can use about 7 GB of memory; allow tens of seconds per photo on CPU. Photos stay on this device."; Layout.fillWidth: true; wrapMode: Text.WordWrap; color: ink }
-            Label { text: backend.modelDescription(); color: muted; font.family: "Geist Mono"; font.pixelSize: 12 }
+            WorkLabel { text: "Face detection and Fast are bundled. High Quality downloads 973 MB and can use about 7 GB of memory; allow tens of seconds per photo on CPU. Photos stay on this device."; Layout.fillWidth: true; wrapMode: Text.WordWrap; color: ink }
+            WorkLabel { text: backend.modelDescription(); color: muted; font.family: "Geist Mono"; font.pixelSize: 12 }
             Action { text: "Download High Quality · 973 MB"; Layout.fillWidth: true; onClicked: {modelDialog.close();backend.installModel("quality")} }
             Action { text: "Repair face detector"; Layout.fillWidth: true; onClicked: {modelDialog.close();backend.installModel("face")} }
             Action { text: "Repair Fast model"; Layout.fillWidth: true; onClicked: {modelDialog.close();backend.installModel("fast")} }

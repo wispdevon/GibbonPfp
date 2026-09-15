@@ -10,6 +10,7 @@ export without changing the originals.
 - Portrait **3:4**, capped at **360 × 480 pixels** by default (width × height).
 - Face-aware auto-crop with adjustable headroom and a review queue for uncertain framing.
 - Single-photo editing, folder import, selection-based batches, and fully automatic mode.
+- Screen output sharpening, enabled by default at Standard, with Low and High levels.
 - Gentle perceptual brightness adjustments and reference-portrait brightness matching.
 - Offline background removal: bundled Fast model and optional High Quality portrait model.
 - Mask inspection, keep/remove brushes, feathering, and transparent PNG or solid-background JPEG.
@@ -62,7 +63,7 @@ see [Arch packaging](docs/BUILDING.md#arch-linux--aur-and-local-updates).
 
 ### Desktop workflow
 
-1. Add photos or a folder. Folder import includes subfolders.
+1. Add photos or a folder, or click **Load sample** for a built-in flat stick-figure portrait. Folder import includes subfolders.
 2. Select a portrait. Auto-crop prepares a 3:4 frame with approximately 8% headroom.
 3. Use the left **Preview / Crop** pane to drag the frame; adjust zoom, brightness, or backgrounds.
 4. Use **Apply settings to selected** to share adjustments. Individual crops stay
@@ -77,7 +78,20 @@ Both panes update together after processing; **Updating…** marks work in progr
 Drag the divider to change pane widths. Click the left crop or tab to it for arrow-key
 adjustments. Use **Result / Mask** inspection and keep/remove brushes on the right.
 Transparency appears on a checkerboard. Brushes operate on the current crop;
-changing framing clears the strokes. Brightness and RAW controls take effect after the
+changing framing clears the strokes. **Crop zoom** is relative to the initial
+automatic frame, with a **40–100%** range: 100% uses its size; lower percentages
+show a wider frame. Zoom respects the requested headroom by keeping the top of
+the head at that fraction of the crop height where source space permits. Changing
+headroom recalculates the frame and keeps your selected zoom percentage. Source
+boundaries can limit widening or headroom; the app reports that limitation.
+Moving the frame, undo, and sessions preserve the selected percentage. Older
+sessions with a manual crop use that saved crop as their 100% baseline.
+
+**Load sample** generates a flat illustrated portrait locally, with known head
+geometry so zoom and headroom can be demonstrated without a private photo. Only
+the exact built-in sample receives these synthetic landmarks; imported portraits
+use normal face detection. The sample stays in the application cache, and repeated
+clicks select the existing queue entry. Brightness and RAW controls take effect after the
 slider is released. **Refresh preview** explicitly recomputes the current settings.
 
 Use **Queue** and **Adjustments** to collapse or reopen the sidebars; adjustments
@@ -90,6 +104,16 @@ and 150%, and Graphite/Blue button accents. The defaults are 100% and Graphite.
 Changes apply immediately and persist locally, separately from photo settings,
 presets, and sessions. Scaling affects text, controls, spacing, and panels on top
 of Qt display scaling; export dimensions and operating-system file dialogs are unchanged.
+
+**Sharpen for screen** is checked by default in Export, at **Standard**. Choose
+Low / Standard / High or uncheck it to disable output sharpening. It runs after
+resizing and brightness and appears in both previews and exported JPEG/PNG files.
+These are GibbonPfp’s own output-sharpening presets, using Lightroom-style level
+names; they do not reproduce Lightroom or Capture One algorithms.
+
+Bundled Inter Medium is explicitly used for Qt controls and dropdown entries,
+Space Grotesk Bold for headings, and Geist Mono for dimensions and zoom readouts.
+Native OS file dialogs retain their system typography.
 
 ## Commands
 
@@ -110,6 +134,10 @@ gibbonpfp process portrait.jpg --output profiles/ --uncapped --size 720x960
 # Gentle brightness and reference matching.
 gibbonpfp process photos/ --output profiles/ --brightness 0.3
 gibbonpfp process photos/ --output profiles/ --reference reference.jpg
+
+# Adjust or disable screen output sharpening (default: standard).
+gibbonpfp process portrait.jpg --output profiles/ --screen-sharpening low
+gibbonpfp process portrait.jpg --output profiles/ --screen-sharpening off
 
 # RAW development, followed by the same portrait pipeline.
 gibbonpfp process portrait.NEF --output profiles/ --white-balance custom \
@@ -145,11 +173,14 @@ to get the complete supported settings shape. Important options include:
 | Setting | Default | Behavior |
 | --- | --- | --- |
 | `autoCrop` | `true` | Estimate a head-and-shoulders frame |
+| `cropZoom` | `100` | 40–100%; lower values widen the automatic frame |
 | `headroom` | `0.08` | Fraction above estimated head top; adjustable 0–0.25 |
 | `capped` | `true` | Maximum 360 × 480 |
 | `width`, `height` | `360`, `480` | Exact 3:4; use both `0` for source-sized uncapped output |
 | `brightness` | `0` | Gentle lightness shift, from −1 to 1 |
 | `background` | `off` | `off`, `fast`, or `quality` |
+| `sharpenScreen` | `true` | Sharpen at final output size |
+| `sharpening` | `standard` | `low`, `standard`, or `high` |
 | `format`, `quality` | `jpeg`, `92` | JPEG or PNG export |
 | `automatic` | `false` | Allow uncertain crop fallbacks to export |
 
@@ -201,6 +232,10 @@ corners, and work-first layout. Fonts are bundled for consistent offline renderi
 - Fast background removal may miss fine hair or similar-colored backgrounds.
   High Quality is optional and can require about **7 GB RAM** and tens of seconds
   per image on CPU; it is deliberately excluded from default packages.
+- Screen sharpening uses an alpha-weighted luminance unsharp mask at final output
+  size: 0.6px Gaussian sigma, a 1/255 detail threshold, and Low/Standard/High amounts
+  of 0.35/0.65/1.0. Luminance adjustment is limited to ±0.1; alpha is unchanged.
+  It can emphasize noise and edges, so compare levels or disable it as needed.
 - Brightness uses a monotonic Oklab lightness curve with endpoint protection and
   chroma reduction for gamut mapping. JPEG quantization remains lossy; the app does
   not promise that every tonal distinction survives compression.

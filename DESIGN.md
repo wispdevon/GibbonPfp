@@ -6,7 +6,11 @@ native Qt Quick workspace. It is an editing tool, with no account or web service
 ## Foundation
 
 Use Inter for work, Space Grotesk for identity/headings, and Geist Mono for pixel
-dimensions. Fonts are bundled under the SIL Open Font License.
+dimensions and numeric zoom readouts. Fonts are bundled under the SIL Open Font License.
+Use Medium (500) for work text and controls, DemiBold (600) for actions, and Bold
+(700) for headings. Explicitly apply these fonts to dropdown delegates, menus,
+fields, checkboxes, tooltips, and app dialogs. Validate bundled font loading at
+startup. Native operating-system file dialogs retain their platform typography.
 
 | Token | Light | Dark |
 | --- | --- | --- |
@@ -36,7 +40,17 @@ the finished export inside the editable crop, over a dimmed
 full source. The right pane offers Result/Mask inspection and crop-coordinate
 brushes. Both share one completed output revision; mark pending work as Updating.
 Use a checkerboard behind transparent pixels. Keyboard navigation, tool labels,
-visible focus, and non-drag crop zoom controls remain available.
+visible focus, and non-drag crop zoom controls remain available. Crop zoom is
+relative to each photo’s automatic frame, from 40–100%: 100% is the automatic
+crop, and lower percentages widen it. Preserve the requested headroom fraction
+while zooming where source space permits. Headroom changes recalculate automatic
+framing without resetting the selected zoom. Keep the percentage through dragging,
+undo, and sessions; report source-boundary limits. A Load sample button provides
+a flat illustrated portrait with known head geometry for demonstrating framing.
+
+Export includes a checked-by-default Sharpen for screen control, with Low, Standard,
+and High levels; Standard is the default. Apply sharpening in the shared core
+after resizing and brightness, before background composition and encoding.
 
 ## Appearance
 

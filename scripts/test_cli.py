@@ -32,6 +32,9 @@ def main():
         run('--version')
         run('-v')
         run('-h')
+        for level in ('off', 'low', 'standard', 'high'):
+            run('process', photo, '--output', root / ('sharpen-' + level), '--no-auto-crop', '--screen-sharpening', level)
+        run('process', photo, '--output', root / 'invalid-sharpen', '--screen-sharpening', 'invalid', code=1)
         raw = pathlib.Path(__file__).resolve().parents[1] / 'tests/fixtures/synthetic.dng'
         run('process', raw, '--output', root / 'raw', '--no-auto-crop', '--white-balance', 'custom', '--temperature', '5500', '--tint', '1.05', '--highlight', '3')
         heic = raw.with_name('synthetic.heic')

@@ -1,4 +1,5 @@
 #include "controller.h"
+#include "fonts.h"
 #include <QFile>
 #include <QFontDatabase>
 #include <QJsonDocument>
@@ -8,6 +9,7 @@
 #include <QQuickStyle>
 #include <QQuickWindow>
 #include <QSettings>
+#include <QStandardPaths>
 #include <QTemporaryDir>
 #include <QtTest>
 
@@ -16,12 +18,11 @@ class ControllerTests : public QObject {
     QTemporaryDir config;
   private slots:
     void initTestCase() {
+        QStandardPaths::setTestModeEnabled(true);
         QSettings::setDefaultFormat(QSettings::IniFormat);
         QSettings::setPath(QSettings::IniFormat, QSettings::UserScope, config.path());
         QQuickStyle::setStyle("Fusion");
-        for (const auto *font : {"Inter", "SpaceGrotesk", "GeistMono"})
-            QFontDatabase::addApplicationFont(
-                QString(GIBBON_SOURCE_DIR "/assets/fonts/%1.ttf").arg(font));
+        loadWorkspaceFonts(GIBBON_SOURCE_DIR "/assets/fonts");
     }
     void appearance() {
         QSettings().clear();
@@ -74,7 +75,10 @@ class ControllerTests : public QObject {
             QCOMPARE(size, QSize(c.result()["width"].toInt(), c.result()["height"].toInt()));
         };
         verifyOutput();
-        for (const auto &edit : QList<QPair<QString, QVariant>>{{"brightness", .3},
+        for (const auto &edit : QList<QPair<QString, QVariant>>{{"sharpenScreen", false},
+                                                                {"sharpening", "high"},
+                                                                {"sharpenScreen", true},
+                                                                {"brightness", .3},
                                                                 {"rotation", 90},
                                                                 {"format", "png"},
                                                                 {"background", "fast"},
@@ -177,12 +181,49 @@ class ControllerTests : public QObject {
         QTest::qWait(100);
         if (!captures.isEmpty())
             QVERIFY(window->grabWindow().save(captures + "/150-export-controls-1024.png"));
+        auto *sharpen = window->findChild<QQuickItem *>("sharpenScreen");
+        QVERIFY(sharpen);
+        QVERIFY(sharpen->property("checked").toBool());
+        auto *flickableItem = qobject_cast<QQuickItem *>(flickable);
+        const double sharpeningY = sharpen->mapToItem(flickableItem, QPointF{}).y() +
+                                   flickable->property("contentY").toDouble() - 16;
+        flickable->setProperty("contentY", std::clamp(sharpeningY, 0., bottom));
+        QTest::qWait(100);
+        if (!captures.isEmpty())
+            QVERIFY(window->grabWindow().save(captures + "/150-screen-sharpening-1024.png"));
         auto *appearance = window->findChild<QObject *>("appearanceDialog");
         QVERIFY(appearance);
         QVERIFY(QMetaObject::invokeMethod(appearance, "open"));
         QTest::qWait(100);
         if (!captures.isEmpty())
             QVERIFY(window->grabWindow().save(captures + "/150-appearance-1024.png"));
+        auto *scaleChoice = window->findChild<QQuickItem *>("appearanceScale");
+        QVERIFY(scaleChoice);
+        const auto controlFont = scaleChoice->property("font").value<QFont>();
+        QCOMPARE(controlFont.family(), "Inter");
+        QVERIFY(controlFont.weight() >= QFont::Medium);
+        auto *popup = scaleChoice->property("popup").value<QObject *>();
+        QVERIFY(popup);
+        QVERIFY(QMetaObject::invokeMethod(popup, "open"));
+        QTest::qWait(150);
+        auto *popupItem = popup->property("contentItem").value<QQuickItem *>();
+        QVERIFY(popupItem);
+        int checked = 0;
+        std::function<void(QQuickItem *)> checkFonts = [&](QQuickItem *item) {
+            if (item->objectName() == "choiceDelegate") {
+                auto font = item->property("font").value<QFont>();
+                QCOMPARE(font.family(), "Inter");
+                QVERIFY(font.weight() >= QFont::Medium);
+                ++checked;
+            }
+            for (auto *child : item->childItems())
+                checkFonts(child);
+        };
+        checkFonts(popupItem);
+        QVERIFY(checked > 0);
+        if (!captures.isEmpty())
+            QVERIFY(window->grabWindow().save(captures + "/150-dropdown-fonts-1024.png"));
+        QVERIFY(QMetaObject::invokeMethod(popup, "close"));
         QVERIFY(QMetaObject::invokeMethod(appearance, "close"));
         QTest::qWait(100);
         // Crop arrows belong to the focused left pane, including after scaling.
@@ -192,10 +233,90 @@ class ControllerTests : public QObject {
         QTRY_VERIFY_WITH_TIMEOUT(!c.busy(), 15000);
         QVERIFY(c.result()["cropX"].toDouble() > x);
         verifyOutput();
+        c.setUiScale(100);
+        window->resize(1440, 940);
+        auto *sampleButton = window->findChild<QQuickItem *>("loadSample");
+        QVERIFY(sampleButton);
+        auto samplePoint =
+            sampleButton->mapToScene(QPointF(sampleButton->width() / 2, sampleButton->height() / 2))
+                .toPoint();
+        QTest::mouseClick(window, Qt::LeftButton, Qt::NoModifier, samplePoint);
+        QTRY_VERIFY_WITH_TIMEOUT(!c.busy(), 15000);
+        QCOMPARE(c.items().size(), 2);
+        QCOMPARE(c.result()["cropZoom"].toDouble(), 100.);
+        window->setProperty("adjustmentsOpen", true);
+        flickable->setProperty("contentY", 0);
+        c.setCropZoom(60);
+        QTRY_VERIFY_WITH_TIMEOUT(!c.busy(), 15000);
+        c.set("headroom", .12);
+        c.preview();
+        QTRY_VERIFY_WITH_TIMEOUT(!c.busy(), 15000);
+        QCOMPARE(c.result()["cropZoom"].toDouble(), 60.);
+        QTest::qWait(100);
+        if (!captures.isEmpty())
+            QVERIFY(window->grabWindow().save(captures + "/sample-headroom-zoom.png"));
         qDeleteAll(qml.rootObjects());
         QSettings().clear();
     }
 
+    void cropZoomState() {
+        QTemporaryDir dir;
+        ImageStore images;
+        Controller c(&images);
+        c.loadSample();
+        QTRY_VERIFY_WITH_TIMEOUT(!c.busy(), 15000);
+        QCOMPARE(c.items().size(), 1);
+        QCOMPARE(c.result()["cropZoom"].toDouble(), 100.);
+        const auto initial = c.result();
+        c.setCropZoom(60);
+        QTRY_VERIFY_WITH_TIMEOUT(!c.busy(), 15000);
+        QCOMPARE(c.result()["cropZoom"].toDouble(), 60.);
+        QVERIFY(c.result()["cropW"].toDouble() > initial["cropW"].toDouble());
+        // The known sample head starts at y=180, even as zoom/headroom change.
+        auto checkHeadroom = [&](double expected) {
+            const auto r = c.result();
+            QVERIFY(qAbs((180. / 1600 - r["cropY"].toDouble()) / r["cropH"].toDouble() - expected) <
+                    .005);
+        };
+        checkHeadroom(.08);
+        const auto zoomed = c.result();
+        c.set("headroom", .12);
+        c.preview();
+        QTRY_VERIFY_WITH_TIMEOUT(!c.busy(), 15000);
+        QCOMPARE(c.result()["cropZoom"].toDouble(), 60.);
+        checkHeadroom(.12);
+        QCOMPARE(c.result()["cropW"], zoomed["cropW"]);
+        c.nudgeCrop(.01, 0);
+        QTRY_VERIFY_WITH_TIMEOUT(!c.busy(), 15000);
+        QCOMPARE(c.result()["cropZoom"].toDouble(), 60.);
+        c.setCropZoom(80);
+        QTRY_VERIFY_WITH_TIMEOUT(!c.busy(), 15000);
+        checkHeadroom(.12);
+        c.undo();
+        QTRY_VERIFY_WITH_TIMEOUT(!c.busy(), 15000);
+        QCOMPARE(c.result()["cropZoom"].toDouble(), 60.);
+        auto session = QUrl::fromLocalFile(dir.filePath("session.json"));
+        c.saveSession(session);
+        c.reset();
+        QTRY_VERIFY_WITH_TIMEOUT(!c.busy(), 15000);
+        c.loadSession(session);
+        QTRY_VERIFY_WITH_TIMEOUT(!c.busy(), 15000);
+        QCOMPARE(c.result()["cropZoom"].toDouble(), 60.);
+        checkHeadroom(.12);
+        c.set("headroom", .1);
+        c.preview();
+        QTRY_VERIFY_WITH_TIMEOUT(!c.busy(), 15000);
+        QCOMPARE(c.result()["cropZoom"].toDouble(), 60.);
+        checkHeadroom(.1);
+        c.setCropZoom(40);
+        QTRY_VERIFY_WITH_TIMEOUT(!c.busy(), 15000);
+        QCOMPARE(c.result()["cropZoom"].toDouble(), 40.);
+        QVERIFY(c.result()["cropX"].toDouble() >= 0);
+        QVERIFY(c.result()["cropY"].toDouble() >= 0);
+        c.loadSample();
+        QTRY_VERIFY_WITH_TIMEOUT(!c.busy(), 15000);
+        QCOMPARE(c.items().size(), 1);
+    }
     void editAndSession() {
         QTemporaryDir dir;
         QImage image(600, 800, QImage::Format_RGB888);

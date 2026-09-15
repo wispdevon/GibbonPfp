@@ -229,6 +229,80 @@ cv::Vec3f Engine::adjust(const cv::Vec3f &rgb, double amount) {
         result[c] = encoded(std::clamp(result[c], 0.f, 1.f));
     return result;
 }
+QByteArray Engine::samplePortrait() {
+    static const QByteArray png = [] {
+        QImage image(1200, 1600, QImage::Format_RGB32);
+        image.fill(QColor("#e9e5dc"));
+        QPainter painter(&image);
+        painter.setRenderHint(QPainter::Antialiasing);
+        painter.setPen(QPen(QColor("#315f86"), 64, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+        painter.drawLine(600, 580, 600, 1110);
+        painter.drawLine(600, 710, 320, 940);
+        painter.drawLine(600, 710, 880, 940);
+        painter.drawLine(600, 1110, 405, 1430);
+        painter.drawLine(600, 1110, 795, 1430);
+        painter.setPen(QPen(QColor("#25282c"), 16));
+        painter.setBrush(QColor("#edc5a3"));
+        painter.drawEllipse(QRectF(420, 180, 360, 420));
+        painter.setPen(Qt::NoPen);
+        painter.setBrush(QColor("#25282c"));
+        painter.drawEllipse(QRectF(500, 340, 24, 30));
+        painter.drawEllipse(QRectF(676, 340, 24, 30));
+        painter.setPen(QPen(QColor("#25282c"), 14, Qt::SolidLine, Qt::RoundCap));
+        painter.drawArc(QRectF(520, 390, 160, 110), 190 * 16, 160 * 16);
+        painter.end();
+        QByteArray data;
+        QBuffer buffer(&data);
+        buffer.open(QIODevice::WriteOnly);
+        image.save(&buffer, "PNG");
+        return data;
+    }();
+    return png;
+}
+QRectF Engine::zoomCrop(QRectF basis, QPointF headAnchor, double percent, double headroom) {
+    if (!std::isfinite(percent) || percent < 40 || percent > 100 || basis.isEmpty() ||
+        !std::isfinite(headroom) || headroom < 0 || headroom > .25)
+        throw std::runtime_error("Crop zoom must be 40–100% and headroom 0–25%");
+    double scale = std::min({100. / percent, 1. / basis.width(), 1. / basis.height()});
+    double width = basis.width() * scale, height = basis.height() * scale;
+    return {std::clamp(headAnchor.x() - width / 2, 0., 1. - width),
+            std::clamp(headAnchor.y() - headroom * height, 0., 1. - height), width, height};
+}
+cv::Mat Engine::sharpenForScreen(const cv::Mat &rgb, const cv::Mat &alpha, const QString &level,
+                                 std::atomic_bool *cancel) {
+    // Output-scale, alpha-normalized luminance unsharp mask. These are our own
+    // screen presets, not a reproduction of Adobe or Capture One processing.
+    const float amount = level == "low" ? .35f : level == "high" ? 1.f : .65f;
+    cv::Mat luma(rgb.rows, rgb.cols, CV_32F), weighted, weight, blurred;
+    for (int y = 0; y < rgb.rows; ++y) {
+        if (y % 32 == 0)
+            checkCancel(cancel);
+        for (int x = 0; x < rgb.cols; ++x) {
+            const auto c = rgb.at<cv::Vec3f>(y, x);
+            luma.at<float>(y, x) = .2126f * c[0] + .7152f * c[1] + .0722f * c[2];
+        }
+    }
+    cv::multiply(luma, alpha, weighted);
+    cv::GaussianBlur(weighted, blurred, {0, 0}, .6);
+    cv::GaussianBlur(alpha, weight, {0, 0}, .6);
+    cv::Mat result = rgb.clone();
+    for (int y = 0; y < rgb.rows; ++y) {
+        if (y % 32 == 0)
+            checkCancel(cancel);
+        for (int x = 0; x < rgb.cols; ++x) {
+            if (alpha.at<float>(y, x) <= 0 || weight.at<float>(y, x) < 1e-6f)
+                continue;
+            float detail = luma.at<float>(y, x) - blurred.at<float>(y, x) / weight.at<float>(y, x);
+            float delta =
+                amount * std::copysign(std::max(0.f, std::abs(detail) - 1.f / 255), detail);
+            delta = std::clamp(delta, -.1f, .1f);
+            auto &c = result.at<cv::Vec3f>(y, x);
+            for (int k = 0; k < 3; ++k)
+                c[k] = std::clamp(c[k] + delta, 0.f, 1.f);
+        }
+    }
+    return result;
+}
 QSize Engine::outputSize(QSize crop, const Settings &s) {
     int units = std::min(crop.width() / 3, crop.height() / 4);
     if (s.capped)
@@ -262,8 +336,17 @@ Result Engine::process(const QString &path, const Settings &s, std::atomic_bool 
     auto analysisImage = source.scaled(960, 960, Qt::KeepAspectRatio, Qt::SmoothTransformation);
     cv::Mat analysis = rgbMat(analysisImage);
     checkCancel(cancel);
+    // Only our exact generated PNG gets synthetic landmarks. Ordinary photos
+    // always use detection, even if renamed to the sample's filename.
+    QFile sampleFile(path);
+    const bool sample = s.rotation % 360 == 0 && sampleFile.size() == samplePortrait().size() &&
+                        sampleFile.open(QIODevice::ReadOnly) &&
+                        sampleFile.readAll() == samplePortrait();
     std::vector<cv::Rect> faces;
-    if ((s.autoCrop && s.crop.isNull()) || !s.reference.isEmpty())
+    if (sample && s.autoCrop)
+        faces.emplace_back(450 * analysis.cols / 1200, 270 * analysis.rows / 1600,
+                           300 * analysis.cols / 1200, 300 * analysis.rows / 1600);
+    else if ((s.autoCrop && s.crop.isNull()) || !s.reference.isEmpty())
         faces = models.faces(analysis);
     if (s.autoCrop && s.crop.isNull()) {
         if (faces.empty())
@@ -272,6 +355,8 @@ Result Engine::process(const QString &path, const Settings &s, std::atomic_bool 
             r.warnings << "Multiple faces; largest face selected";
     }
     QRectF crop = s.crop;
+    QPointF headAnchor;
+    bool faceAnchor = false;
     if (crop.isNull()) {
         double height = std::min(double(source.height()), source.width() / .75),
                width = height * .75;
@@ -279,10 +364,12 @@ Result Engine::process(const QString &path, const Settings &s, std::atomic_bool 
         if (s.autoCrop && !faces.empty()) {
             auto f = faces.front();
             double top = f.y - .3 * f.height;
-            auto mask = models.mask(analysis, "fast");
+            auto mask = sample ? cv::Mat() : models.mask(analysis, "fast");
             int from = std::max(0, int(f.y - .7 * f.height)), to = std::max(0, f.y);
-            bool found = false;
-            for (int yy = from; yy < to; ++yy) {
+            bool found = sample;
+            if (sample)
+                top = 180. * analysis.rows / 1600;
+            for (int yy = from; yy < to && !sample; ++yy) {
                 int count = 0;
                 for (int xx = std::max(0, f.x); xx < std::min(mask.cols, f.x + f.width); ++xx)
                     if (mask.at<float>(yy, xx) > .65)
@@ -297,6 +384,8 @@ Result Engine::process(const QString &path, const Settings &s, std::atomic_bool 
                 r.warnings << "Head boundary is uncertain";
             double scale = double(source.height()) / analysis.rows,
                    head = (f.y + f.height - top) * scale;
+            headAnchor = QPointF((f.x + f.width / 2.) / analysis.cols, top / analysis.rows);
+            faceAnchor = true;
             height = head / .6;
             width = height * .75;
             x = (f.x + f.width / 2.) * scale - width / 2;
@@ -312,9 +401,20 @@ Result Engine::process(const QString &path, const Settings &s, std::atomic_bool 
         crop = {x / source.width(), y / source.height(), width / source.width(),
                 height / source.height()};
     }
+    r.cropBasis = s.crop.isNull() || s.cropBasis.isNull() ? crop : s.cropBasis;
+    if (s.crop.isNull()) {
+        if (!faceAnchor)
+            headAnchor = QPointF(crop.center().x(), crop.y() + s.headroom * crop.height());
+        crop = zoomCrop(r.cropBasis, headAnchor, s.cropZoom, s.headroom);
+        if (faceAnchor && std::abs((headAnchor.y() - crop.y()) / crop.height() - s.headroom) > .005)
+            r.warnings << "Limited source space; requested headroom could not be maintained";
+    }
+    if (s.crop.isNull() && r.cropBasis.width() * 100. / s.cropZoom > crop.width() + 1e-6)
+        r.warnings << "Crop zoom limited by source boundaries";
     // Normalize manual crops to exact 3:4 by shrinking about their center.
     double w = crop.width() * source.width(), h = crop.height() * source.height();
-    int units = std::min({int(std::min(w / 3, h / 4)), source.width() / 3, source.height() / 4});
+    int units =
+        std::min({int(std::min(w / 3, h / 4) + 1e-7), source.width() / 3, source.height() / 4});
     if (units < 1)
         throw std::runtime_error("Crop is too small");
     QRect region(int(crop.center().x() * source.width() - units * 1.5),
@@ -383,6 +483,14 @@ Result Engine::process(const QString &path, const Settings &s, std::atomic_bool 
         if (s.feather > 0)
             cv::GaussianBlur(alpha, alpha, {0, 0}, s.feather);
     }
+    for (int y = 0; y < rgb.rows; ++y) {
+        if (y % 32 == 0)
+            checkCancel(cancel);
+        for (int x = 0; x < rgb.cols; ++x)
+            rgb.at<cv::Vec3f>(y, x) = adjust(rgb.at<cv::Vec3f>(y, x), r.brightness);
+    }
+    if (s.sharpenScreen)
+        rgb = sharpenForScreen(rgb, alpha, s.sharpening, cancel);
     QImage output(cut.size(), QImage::Format_RGBA8888),
         maskImage(cut.size(), QImage::Format_Grayscale8);
     cv::Vec3f bg{float(s.backgroundColor.redF()), float(s.backgroundColor.greenF()),
@@ -393,7 +501,7 @@ Result Engine::process(const QString &path, const Settings &s, std::atomic_bool 
         auto *row = output.scanLine(y);
         auto *mr = maskImage.scanLine(y);
         for (int x = 0; x < rgb.cols; ++x) {
-            auto color = adjust(rgb.at<cv::Vec3f>(y, x), r.brightness);
+            auto color = rgb.at<cv::Vec3f>(y, x);
             float a = alpha.at<float>(y, x);
             mr[x] = uchar(std::lround(std::clamp(a, 0.f, 1.f) * 255));
             if (s.format == "jpeg") {
