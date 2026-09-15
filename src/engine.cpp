@@ -351,13 +351,26 @@ static double medianLightness(const cv::Mat &rgb, cv::Rect face) {
     std::nth_element(values.begin(), mid, values.end());
     return *mid;
 }
-Result Engine::process(const QString &path, const Settings &s, std::atomic_bool *cancel) {
+QJsonObject Result::diagnostics() const {
+    QJsonArray stages;
+    for (const auto &t : timings) stages.append(QJsonObject{
+        {"stage", QString::fromStdString(t.stage)}, {"detail", QString::fromStdString(t.detail)},
+        {"milliseconds", t.milliseconds}, {"cached", t.cached}});
+    return {{"totalMs", totalMs}, {"stages", stages}, {"device", deviceStatus},
+            {"cacheHits", double(cacheHits)}, {"cacheMisses", double(cacheMisses)}};
+}
+Result Engine::process(const QString &path, const Settings &s, std::atomic_bool *cancel,
+                       ProgressCallback progress) {
+    ProcessingTrace trace(std::move(progress));
+    const auto before = models.cacheStats();
     bool completed = false;
     const auto cleanup = qScopeGuard([&] { if (!completed) models.clearCache(); });
     s.validate();
     checkCancel(cancel);
     Result r;
+    trace.stage("Decoding");
     auto source = decode(path, s);
+    trace.stage("Framing");
     r.sourceSize = source.size();
     r.source = source.scaled(1200, 1200, Qt::KeepAspectRatio, Qt::SmoothTransformation)
                    .convertToFormat(QImage::Format_RGBA8888);
@@ -375,7 +388,7 @@ Result Engine::process(const QString &path, const Settings &s, std::atomic_bool 
         faces.emplace_back(450 * analysis.cols / 1200, 270 * analysis.rows / 1600,
                            300 * analysis.cols / 1200, 300 * analysis.rows / 1600);
     else if ((s.autoCrop && s.crop.isNull()) || !s.reference.isEmpty())
-        faces = models.faces(analysis, cancel);
+        faces = models.faces(analysis, cancel, &trace);
     if (s.autoCrop && s.crop.isNull()) {
         if (faces.empty())
             r.warnings << "No face detected; center crop needs review";
@@ -392,7 +405,7 @@ Result Engine::process(const QString &path, const Settings &s, std::atomic_bool 
         if (s.autoCrop && !faces.empty()) {
             auto f = faces.front();
             double top = f.y - .3 * f.height;
-            auto mask = sample ? cv::Mat() : models.mask(analysis, "fast", "head", cancel);
+            auto mask = sample ? cv::Mat() : models.mask(analysis, "fast", "head", cancel, &trace);
             int from = std::max(0, int(f.y - .7 * f.height)), to = std::max(0, f.y);
             bool found = sample;
             if (sample)
@@ -456,7 +469,7 @@ Result Engine::process(const QString &path, const Settings &s, std::atomic_bool 
         auto ref = decode(s.reference, Settings{})
                        .scaled(960, 960, Qt::KeepAspectRatio, Qt::SmoothTransformation);
         auto refRgb = rgbMat(ref);
-        auto refFaces = models.faces(refRgb, cancel);
+        auto refFaces = models.faces(refRgb, cancel, &trace);
         if (faces.size() != 1 || refFaces.size() != 1)
             r.warnings << "Brightness matching requires one face in source and reference";
         else {
@@ -493,10 +506,12 @@ Result Engine::process(const QString &path, const Settings &s, std::atomic_bool 
     }
     if (s.background != "off") {
         checkCancel(cancel);
-        auto contextMask = models.mask(rgbMat(maskGuide), s.background, "export", cancel);
+        auto contextMask = models.mask(rgbMat(maskGuide), s.background, "export", cancel, &trace);
         maskGuide = QImage();
+        trace.stage("Mask refinement", "Map removal context to export crop");
         auto segmentation = cropMask(contextMask, context, region, r.outputSize);
         cv::multiply(alpha, segmentation, alpha);
+        trace.stage("Edits", "Feather and brushes");
         // Feather the automatic mask; manual corrections remain explicit keep/remove pixels.
         if (s.feather > 0)
             cv::GaussianBlur(alpha, alpha, {0, 0}, s.feather);
@@ -525,6 +540,7 @@ Result Engine::process(const QString &path, const Settings &s, std::atomic_bool 
             }
         }
     }
+    trace.stage("Edits", "Brightness and sharpening");
     for (int y = 0; y < rgb.rows; ++y) {
         if (y % 32 == 0)
             checkCancel(cancel);
@@ -557,6 +573,7 @@ Result Engine::process(const QString &path, const Settings &s, std::atomic_bool 
         }
     }
     output.setColorSpace(QColorSpace::SRgb);
+    trace.stage("Encoding");
     QBuffer buffer(&r.encoded);
     buffer.open(QIODevice::WriteOnly);
     QImageWriter writer(&buffer, s.format.toLatin1());
@@ -569,6 +586,12 @@ Result Engine::process(const QString &path, const Settings &s, std::atomic_bool 
                  ? maskImage.scaled(1200, 1200, Qt::KeepAspectRatio, Qt::FastTransformation)
                  : maskImage;
     checkCancel(cancel);
+    r.timings = trace.finish();
+    r.totalMs = trace.elapsed();
+    r.deviceStatus = models.inferenceStatus();
+    const auto after = models.cacheStats();
+    r.cacheHits = after.hits - before.hits;
+    r.cacheMisses = after.misses - before.misses;
     completed = true;
     return r;
 }

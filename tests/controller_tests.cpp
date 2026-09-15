@@ -134,6 +134,23 @@ class ControllerTests : public QObject {
         QVERIFY(fresh.qualityConfirmationPending());
         fresh.cancel();
     }
+    void progressAndStaleUpdates() {
+        ImageStore images;
+        Controller c(&images);
+        c.working = true;
+        c.beginProgress();
+        auto token = c.operation;
+        c.acceptProgress(token, 2, 5, {"Inference", "fast"});
+        QVERIFY(c.processingProgress().contains("Photo 2 of 5"));
+        c.acceptProgress(token - 1, 3, 5, {"Stale"});
+        QVERIFY(!c.processingProgress().contains("Stale"));
+        c.cancel();
+        QVERIFY(c.processingProgress().contains("Cancellation pending"));
+        c.endProgress();
+        c.acceptProgress(token, 3, 5, {"Late"});
+        QVERIFY(c.processingProgress().isEmpty());
+        c.working = false;
+    }
     void releaseAndDevicePreference() {
         QSettings().remove("processingDevice");
         const auto restore = qScopeGuard([] { QSettings().remove("processingDevice"); });
@@ -396,6 +413,14 @@ class ControllerTests : public QObject {
         if (!captures.isEmpty())
             QVERIFY(window->grabWindow().save(captures + "/gpu-models-150.png"));
         QVERIFY(QMetaObject::invokeMethod(modelsDialog, "close"));
+        c.working = true;
+        c.beginProgress();
+        c.acceptProgress(c.operation, 2, 5, {"Cached mask", "export · fast", 1200, true});
+        QTest::qWait(120);
+        if (!captures.isEmpty())
+            QVERIFY(window->grabWindow().save(captures + "/processing-stage-150.png"));
+        c.endProgress();
+        c.working = false;
         // Crop arrows belong to the focused left pane, including after scaling.
         input->forceActiveFocus();
         double x = c.result()["cropX"].toDouble();

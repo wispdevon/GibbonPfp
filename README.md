@@ -381,7 +381,16 @@ gibbonpfp --help
 Exit codes: **0** success; **2** held photos or per-file failures; **1** invalid
 options or a fatal error; **130** interrupted processing. Each processed input
 produces a JSON result line on stdout. Reports contain source/output paths,
-status, and warnings/errors. Filename collisions receive numeric suffixes.
+status, and warnings/errors. JSON results also include `diagnostics`: total wall
+time in milliseconds, ordered exclusive stage timings, selected model devices,
+and cache hits/misses. Warm cache reuse has its own stage instead of inference.
+Filename collisions receive numeric suffixes.
+
+Desktop processing shows the current stage and operation elapsed time; batches
+include the current photo number. Cancellation stays pending until an active
+native decoder/inference call returns. Worker progress is marshalled onto the UI
+thread and outdated operation updates are discarded. No estimated percentages
+are shown.
 
 ## Configuration and saved work
 

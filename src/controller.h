@@ -1,6 +1,8 @@
 #pragma once
 #include "engine.h"
 #include <QMutex>
+#include <QTimer>
+#include <QElapsedTimer>
 #include <QObject>
 #include <QQuickImageProvider>
 #include <QThreadPool>
@@ -29,6 +31,7 @@ class Controller : public QObject {
     Q_PROPERTY(QString inferenceStatus READ inferenceStatus NOTIFY changed)
     Q_PROPERTY(bool highQualityLoaded READ highQualityLoaded NOTIFY changed)
     Q_PROPERTY(bool qualityConfirmationPending READ qualityConfirmationPending NOTIFY changed)
+    Q_PROPERTY(QString processingProgress READ processingProgress NOTIFY progressChanged)
     Q_PROPERTY(bool busy READ busy NOTIFY changed)
     Q_PROPERTY(QString message READ message NOTIFY changed)
     Q_PROPERTY(int revision READ revision NOTIFY changed)
@@ -60,6 +63,7 @@ class Controller : public QObject {
         return bool(pendingQualityAction);
     }
     Q_INVOKABLE void confirmHighQuality(bool accept);
+    QString processingProgress() const;
     bool busy() const {
         return working;
     }
@@ -99,12 +103,7 @@ class Controller : public QObject {
     Q_INVOKABLE void removeSelected();
     Q_INVOKABLE void batch(const QUrl &directory, bool exportFiles);
     Q_INVOKABLE void exportCurrent(const QUrl &directory);
-    Q_INVOKABLE void cancel() {
-        if (qualityConfirmationPending())
-            confirmHighQuality(false);
-        else
-            cancelled = true;
-    }
+    Q_INVOKABLE void cancel();
     Q_INVOKABLE void saveSession(const QUrl &url);
     Q_INVOKABLE void loadSession(const QUrl &url);
     Q_INVOKABLE void savePreset(const QUrl &url);
@@ -117,6 +116,7 @@ class Controller : public QObject {
     Q_INVOKABLE void stroke(const QVariantList &points, bool keep, double radius);
   signals:
     void changed();
+    void progressChanged();
     void appearanceChanged();
     void highQualityConfirmationRequested();
 
@@ -128,6 +128,16 @@ class Controller : public QObject {
         QVector<gibbon::Settings> history;
         QStringList warnings;
     };
+    quint64 operation = 0;
+    QTimer progressTimer;
+    QElapsedTimer progressClock;
+    QString stageText;
+    int progressPhoto = 0, progressTotal = 0;
+    void beginProgress();
+    void endProgress();
+    gibbon::ProgressCallback progressCallback(quint64 token, int photo, int total);
+    void acceptProgress(quint64 token, int photo, int total, const gibbon::Progress &progress);
+    friend class ControllerTests;
     QVector<Item> queue;
     int index = -1, generation = 0;
     int interfaceScale = 100;

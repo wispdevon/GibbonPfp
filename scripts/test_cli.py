@@ -29,6 +29,12 @@ def main():
             result = subprocess.run([exe, *map(str, args)], text=True, capture_output=True, timeout=180)
             assert result.returncode == code, (args, result.returncode, result.stdout, result.stderr)
             return result.stdout
+        diagnostic = json.loads(run('process', photo, '--output', root / 'diagnostic', '--no-auto-crop'))['diagnostics']
+        assert diagnostic['totalMs'] > 0
+        assert diagnostic['stages'][0]['stage'] == 'Decoding'
+        assert diagnostic['stages'][-1]['stage'] == 'Encoding'
+        assert diagnostic['cacheHits'] == 0
+        assert 'device' in diagnostic
         run('--version')
         run('-v')
         run('-h')

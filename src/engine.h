@@ -14,6 +14,11 @@ struct Result {
     bool review = false;
     QSize sourceSize, outputSize;
     double brightness = 0;
+    double totalMs = 0;
+    std::vector<StageTiming> timings;
+    QString deviceStatus;
+    size_t cacheHits = 0, cacheMisses = 0;
+    QJsonObject diagnostics() const;
 };
 class Engine {
   public:
@@ -27,7 +32,7 @@ class Engine {
         return models.highQualityLoaded();
     }
     Result process(const QString &path, const Settings &settings,
-                   std::atomic_bool *cancel = nullptr);
+                   std::atomic_bool *cancel = nullptr, ProgressCallback progress = {});
     static QRectF zoomCrop(QRectF basis, QPointF headAnchor, double percent, double headroom);
     static QRect maskContext(QRect crop, QSize sourceSize, double zoom, double headroom);
     static cv::Mat cropMask(const cv::Mat &mask, QRect context, QRect crop, QSize outputSize);

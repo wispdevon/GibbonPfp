@@ -11,6 +11,7 @@
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
 #include <QSaveFile>
+#include <QScopeGuard>
 #include <QStandardPaths>
 #include <QTimer>
 #include <algorithm>
@@ -257,13 +258,18 @@ std::vector<Ort::Value> Models::run(const QString &id, const cv::Mat &rgb, int s
         return run(id, rgb, size, mean, scale);
     }
 }
-std::vector<cv::Rect> Models::faces(const cv::Mat &rgb, std::atomic_bool *cancel) {
+std::vector<cv::Rect> Models::faces(const cv::Mat &rgb, std::atomic_bool *cancel, ProcessingTrace *trace) {
+    const auto previous = trace ? trace->state() : Progress{};
+    const auto restore = qScopeGuard([&] { if (trace) trace->stage(previous.stage, previous.detail); });
+    if (trace) trace->stage(sessions.contains("face") ? "Cache lookup" : "Model loading", "face");
     checkModelCancel(cancel);
     const auto key = cacheKey(rgb, "face", "detection");
     if (auto cached = cache.get(key)) {
         checkModelCancel(cancel);
+        if (trace) trace->stage("Cached detection", "face", true);
         return std::get<std::vector<cv::Rect>>(*cached);
     }
+    if (trace) trace->stage("Inference", "face");
     // YuNet 2023: fixed 640x640, BGR 0..255, outputs cls/obj/bbox/kps at strides 8,16,32.
     cv::Mat bgr;
     cv::cvtColor(rgb, bgr, cv::COLOR_RGB2BGR);
@@ -354,17 +360,24 @@ cv::Mat Models::refineFastMask(const cv::Mat &prediction, const cv::Mat &rgb) {
     return refined;
 }
 cv::Mat Models::mask(const cv::Mat &rgb, const QString &method, const QString &purpose,
-                     std::atomic_bool *cancel) {
+                     std::atomic_bool *cancel, ProcessingTrace *trace) {
+    const auto previous = trace ? trace->state() : Progress{};
+    const auto restore = qScopeGuard([&] { if (trace) trace->stage(previous.stage, previous.detail); });
+    const auto detail = (purpose + " · " + method).toStdString();
+    if (trace) trace->stage(sessions.contains(method) ? "Cache lookup" : "Model loading", detail);
     checkModelCancel(cancel);
     const auto key = cacheKey(rgb, method, purpose);
     if (auto cached = cache.get(key)) {
         checkModelCancel(cancel);
+        if (trace) trace->stage("Cached mask", detail, true);
         return std::get<cv::Mat>(*cached);
     }
+    if (trace) trace->stage("Inference", detail);
     bool fast = method == "fast";
     auto outputs =
         fast ? run("fast", rgb, 512, {.5f, .5f, .5f}, {2, 2, 2})
              : run("quality", rgb, 1024, {.485f, .456f, .406f}, {1 / .229f, 1 / .224f, 1 / .225f});
+    if (trace) trace->stage("Mask refinement", detail);
     auto shape = outputs[0].GetTensorTypeAndShapeInfo().GetShape();
     if (shape.size() != 4)
         throw std::runtime_error("Unexpected segmentation output shape");

@@ -209,6 +209,7 @@ int main(int argc, char **argv) {
                 QJsonObject entry{{"source", file}};
                 try {
                     auto r = engine.process(file, s, &interrupted);
+                    entry["diagnostics"] = r.diagnostics();
                     entry["warnings"] = QJsonArray::fromStringList(r.warnings);
                     entry["width"] = r.outputSize.width();
                     entry["height"] = r.outputSize.height();

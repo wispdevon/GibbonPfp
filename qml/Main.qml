@@ -356,7 +356,7 @@ ApplicationWindow {
             Rectangle { width: parent.width; height: 1; color: line }
             RowLayout { anchors.fill: parent; anchors.margins: 16; spacing: 10
                 Rectangle { width: 7; height: 7; radius: 4; color: backend.busy ? "#bb934f" : "#819483" }
-                WorkLabel { text: backend.message; Layout.fillWidth: true; color: muted; font.pixelSize: 11; wrapMode: Text.WordWrap; maximumLineCount: 2; elide: Text.ElideRight }
+                WorkLabel { text: backend.processingProgress.length ? backend.processingProgress : backend.message; Layout.fillWidth: true; color: muted; font.pixelSize: 11; wrapMode: Text.WordWrap; maximumLineCount: 2; elide: Text.ElideRight }
                 Action { visible: backend.busy; text: "Cancel"; onClicked: backend.cancel() }
                 Action { text: workspace.width < 900 ? "Refresh" : "Refresh preview"; enabled: hasPhoto&&!backend.busy; onClicked: backend.preview() }
                 Action { text: workspace.width < 900 ? "Export" : "Export current"; enabled: hasPhoto&&!backend.busy; onClicked: {folderAction="current";folders.open()} }

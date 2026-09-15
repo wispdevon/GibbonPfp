@@ -48,10 +48,23 @@ class CoreTests : public QObject {
         s.background = "fast";
         s.format = "png";
         Engine engine;
-        auto cold = engine.process(path, s);
+        std::vector<Progress> updates;
+        auto cold = engine.process(path, s, nullptr, [&](const Progress &p) { updates.push_back(p); });
+        QCOMPARE(updates.front().stage, std::string("Decoding"));
+        QCOMPARE(updates.back().stage, std::string("Encoding"));
+        QVERIFY(std::any_of(updates.begin(), updates.end(), [](const auto &p) { return p.stage == "Inference"; }));
+        double last = 0;
+        for (const auto &p : updates) { QVERIFY(p.elapsedMs >= last); last = p.elapsedMs; }
+        QVERIFY(cold.totalMs > 0);
+        double stageSum = 0;
+        for (const auto &t : cold.timings) { QVERIFY(t.milliseconds >= 0); stageSum += t.milliseconds; }
+        QVERIFY(stageSum <= cold.totalMs);
         const auto misses = engine.cacheStats().misses;
         auto warm = engine.process(path, s);
         QCOMPARE(cold.encoded, warm.encoded);
+        QVERIFY(warm.cacheHits > 0);
+        QVERIFY(std::none_of(warm.timings.begin(), warm.timings.end(), [](const auto &t) { return t.stage == "Inference"; }));
+        QVERIFY(std::any_of(warm.timings.begin(), warm.timings.end(), [](const auto &t) { return t.stage == "Cached mask" && t.cached; }));
         QCOMPARE(engine.cacheStats().misses, misses);
         QVERIFY(engine.cacheStats().hits > 0);
         s.brightness = .2;

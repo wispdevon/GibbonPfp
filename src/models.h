@@ -1,5 +1,6 @@
 #pragma once
 #include "processing_cache.h"
+#include "progress.h"
 #include <QJsonArray>
 #include <QString>
 #include <atomic>
@@ -26,9 +27,9 @@ class Models {
     static QString locate(const QString &id);
     static QString install(const QString &id, std::atomic_bool *cancel = nullptr,
                            std::function<void(qint64, qint64)> progress = {});
-    std::vector<cv::Rect> faces(const cv::Mat &rgb, std::atomic_bool *cancel = nullptr);
+    std::vector<cv::Rect> faces(const cv::Mat &rgb, std::atomic_bool *cancel = nullptr, ProcessingTrace *trace = nullptr);
     cv::Mat mask(const cv::Mat &rgb, const QString &method,
-                 const QString &purpose = "export", std::atomic_bool *cancel = nullptr);
+                 const QString &purpose = "export", std::atomic_bool *cancel = nullptr, ProcessingTrace *trace = nullptr);
     void clearCache() { cache.clear(); }
     ProcessingCache::Stats cacheStats() const { return cache.statistics(); }
     static cv::Mat refineFastMask(const cv::Mat &prediction, const cv::Mat &rgb);

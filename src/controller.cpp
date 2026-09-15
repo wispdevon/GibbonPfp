@@ -37,6 +37,8 @@ void ImageStore::put(const QString &id, const QImage &i) {
     images[id] = i;
 }
 Controller::Controller(ImageStore *store, QObject *parent) : QObject(parent), images(store) {
+    progressTimer.setInterval(100);
+    connect(&progressTimer, &QTimer::timeout, this, &Controller::progressChanged);
     pool.setMaxThreadCount(1);
     if (QSettings().value("processingDevice").toString() == "cpu") devicePreference = "cpu";
     engine.setDevice(devicePreference);
@@ -53,6 +55,46 @@ Controller::Controller(ImageStore *store, QObject *parent) : QObject(parent), im
 Controller::~Controller() {
     cancelled = true;
     pool.waitForDone();
+}
+void Controller::beginProgress() {
+    ++operation;
+    stageText = "Preparing";
+    progressPhoto = 0;
+    progressTotal = 0;
+    progressClock.start();
+    progressTimer.start();
+    emit progressChanged();
+}
+void Controller::endProgress() {
+    ++operation; // Invalidate any queued worker notification.
+    progressTimer.stop();
+    stageText.clear();
+    emit progressChanged();
+}
+QString Controller::processingProgress() const {
+    if (!progressTimer.isActive()) return {};
+    const QString prefix = progressTotal > 1 ? QString("Photo %1 of %2 · ").arg(progressPhoto).arg(progressTotal) : QString();
+    return prefix + stageText + QString(" · %1 s").arg(progressClock.elapsed() / 1000., 0, 'f', 1) +
+        (cancelled ? " · Cancellation pending; waiting for the current stage" : "");
+}
+void Controller::acceptProgress(quint64 token, int photo, int total, const Progress &progress) {
+    if (!working || token != operation || !progressTimer.isActive()) return;
+    progressPhoto = photo;
+    progressTotal = total;
+    stageText = QString::fromStdString(progress.stage);
+    if (!progress.detail.empty()) stageText += " · " + QString::fromStdString(progress.detail);
+    emit progressChanged();
+}
+ProgressCallback Controller::progressCallback(quint64 token, int photo, int total) {
+    return [this, token, photo, total](const Progress &progress) {
+        QMetaObject::invokeMethod(this, [this, token, photo, total, progress] {
+            acceptProgress(token, photo, total, progress);
+        }, Qt::QueuedConnection);
+    };
+}
+void Controller::cancel() {
+    if (qualityConfirmationPending()) confirmHighQuality(false);
+    else { cancelled = true; emit progressChanged(); }
 }
 void Controller::releaseModels() {
     if (working) return;
@@ -373,6 +415,8 @@ void Controller::preview() {
         return;
     working = true;
     cancelled = false;
+    beginProgress();
+    const auto token = operation;
     status = "Preparing portrait…";
     emit changed();
     int row = index;
@@ -385,6 +429,7 @@ void Controller::preview() {
     connect(w, &QFutureWatcher<Work>::finished, this, [this, w, row] {
         auto work = w->result();
         working = false;
+        endProgress();
         qualityConsent = false;
         if (work.error.isEmpty()) {
             showResult(work.result, row);
@@ -398,10 +443,10 @@ void Controller::preview() {
         w->deleteLater();
         emit changed();
     });
-    w->setFuture(QtConcurrent::run(&pool, [this, item] {
+    w->setFuture(QtConcurrent::run(&pool, [this, item, token] {
         Work work;
         try {
-            work.result = engine.process(item.path, item.settings, &cancelled);
+            work.result = engine.process(item.path, item.settings, &cancelled, progressCallback(token, 1, 1));
         } catch (const std::exception &e) {
             work.error = errorText(e);
         }
@@ -436,25 +481,30 @@ void Controller::processMany(QVector<int> rows, QString directory, bool exportFi
     working = true;
     cancelled = false;
     auto snapshot = queue;
+    beginProgress();
+    const auto token = operation;
     status = "Processing selected photos…";
     emit changed();
     auto *w = new QFutureWatcher<QString>(this);
     connect(w, &QFutureWatcher<QString>::finished, this, [this, w] {
         working = false;
+        endProgress();
         status = w->result();
         qualityConsent = false;
         w->deleteLater();
         emit changed();
     });
-    w->setFuture(QtConcurrent::run(&pool, [this, rows, snapshot, directory, exportFiles] {
+    w->setFuture(QtConcurrent::run(&pool, [this, rows, snapshot, directory, exportFiles, token] {
         int done = 0, held = 0, failed = 0;
         QJsonArray report;
+        int photo = 0;
         for (int row : rows) {
+            ++photo;
             if (cancelled)
                 break;
             const auto &q = snapshot[row];
             try {
-                auto r = engine.process(q.path, q.settings, &cancelled);
+                auto r = engine.process(q.path, q.settings, &cancelled, progressCallback(token, photo, rows.size()));
                 QString output;
                 if (r.review)
                     ++held;
@@ -468,13 +518,15 @@ void Controller::processMany(QVector<int> rows, QString directory, bool exportFi
                                           {"status", r.review      ? "review"
                                                      : exportFiles ? "exported"
                                                                    : "ready"},
-                                          {"warnings", QJsonArray::fromStringList(r.warnings)}});
+                                          {"warnings", QJsonArray::fromStringList(r.warnings)},
+                                          {"diagnostics", r.diagnostics()}});
                 r.encoded.clear();
                 r.preview =
                     r.preview.scaled(1400, 1400, Qt::KeepAspectRatio, Qt::SmoothTransformation);
                 QMetaObject::invokeMethod(
                     this,
-                    [this, r, row, output] {
+                    [this, r, row, output, token] {
+                        if (token != operation) return;
                         showResult(r, row);
                         if (!output.isEmpty())
                             queue[row].state = "Exported";
@@ -491,7 +543,8 @@ void Controller::processMany(QVector<int> rows, QString directory, bool exportFi
                     QJsonObject{{"source", q.path}, {"status", "failed"}, {"error", error}});
                 QMetaObject::invokeMethod(
                     this,
-                    [this, row, error] {
+                    [this, row, error, token] {
+                        if (token != operation) return;
                         queue[row].state = "Failed";
                         queue[row].error = error;
                         emit changed();
@@ -628,6 +681,7 @@ void Controller::installModel(const QString &id) {
     auto *w = new QFutureWatcher<QString>(this);
     connect(w, &QFutureWatcher<QString>::finished, this, [this, w] {
         working = false;
+        endProgress();
         status = w->result();
         qualityConsent = false;
         w->deleteLater();
