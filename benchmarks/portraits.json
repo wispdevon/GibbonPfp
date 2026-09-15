@@ -1,0 +1,120 @@
+{
+  "version": 1,
+  "portraits": [
+    {
+      "id": "portrait-1",
+      "file": "portrait-1.jpg",
+      "title": "Jimmy Wales in August 2006.jpg",
+      "source": "https://commons.wikimedia.org/wiki/File:Jimmy_Wales_in_August_2006.jpg",
+      "url": "https://upload.wikimedia.org/wikipedia/commons/b/b3/Jimmy_Wales_in_August_2006.jpg",
+      "sha256": "ca327a3938b28f735bd8faac7ba1d2324c77e30ee88c5b7bfd6312a79f9ac163",
+      "bytes": 7587311,
+      "license": "CC BY-SA 2.5",
+      "author": "Gus Freedman; current revision edits by Jacek Halicki and earlier contributors",
+      "licenseUrl": "https://creativecommons.org/licenses/by-sa/2.5",
+      "categories": [
+        "frame-edge subject"
+      ],
+      "attribution": "Jimmy Wales in August 2006.jpg — Gus Freedman; current revision edits by Jacek Halicki and earlier contributors — CC BY-SA 2.5",
+      "verified": "2026-09-16",
+      "changes": "Benchmark outputs crop, resize, mask, sharpen, and composite the source; originals are retained. Derived images retain the source license."
+    },
+    {
+      "id": "portrait-2",
+      "file": "portrait-2.jpg",
+      "title": "Tim Berners-Lee April 2009.jpg",
+      "source": "https://commons.wikimedia.org/wiki/File:Tim_Berners-Lee_April_2009.jpg",
+      "url": "https://upload.wikimedia.org/wikipedia/commons/c/c8/Tim_Berners-Lee_April_2009.jpg",
+      "sha256": "8d26e876c74b3d414ac9acda3db1a27ca5f3e870471672b76aabae7d2fc42f06",
+      "bytes": 666997,
+      "license": "CC BY 2.0",
+      "author": "Enrique Dans",
+      "licenseUrl": "https://creativecommons.org/licenses/by/2.0",
+      "categories": [
+        "dark clothing",
+        "low contrast"
+      ],
+      "attribution": "Tim Berners-Lee April 2009.jpg — Enrique Dans — CC BY 2.0",
+      "verified": "2026-09-16",
+      "changes": "Benchmark outputs crop, resize, mask, sharpen, and composite the source; originals are retained. Derived images retain the source license."
+    },
+    {
+      "id": "portrait-3",
+      "file": "portrait-3.jpg",
+      "title": "Alexander Noll.jpg",
+      "source": "https://commons.wikimedia.org/wiki/File:Alexander_Noll.jpg",
+      "url": "https://upload.wikimedia.org/wikipedia/commons/4/4a/Alexander_Noll.jpg",
+      "sha256": "6b67c521f920604132ce7c90466c9f6e306d2b9ffa0b2168bbe836a5d824e1fb",
+      "bytes": 224567,
+      "license": "CC BY-SA 4.0",
+      "author": "Alexander Noll",
+      "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+      "categories": [
+        "glasses",
+        "dark clothing"
+      ],
+      "attribution": "Alexander Noll.jpg — Alexander Noll — CC BY-SA 4.0",
+      "verified": "2026-09-16",
+      "changes": "Benchmark outputs crop, resize, mask, sharpen, and composite the source; originals are retained. Derived images retain the source license."
+    },
+    {
+      "id": "portrait-4",
+      "file": "portrait-4.jpg",
+      "title": "Donna Strickland EM1B5760 (46183560632) (cropped).jpg",
+      "source": "https://commons.wikimedia.org/wiki/File:Donna_Strickland_EM1B5760_%2846183560632%29_%28cropped%29.jpg",
+      "url": "https://upload.wikimedia.org/wikipedia/commons/3/38/Donna_Strickland_EM1B5760_%2846183560632%29_%28cropped%29.jpg",
+      "sha256": "3f29a549874fa567d14508b167b024c6b16ca76e6dcb16c2857a9c15d1577f22",
+      "bytes": 9262973,
+      "license": "CC BY 2.0",
+      "author": "Bengt Nyman; crop by Gaia Octavia Agrippa",
+      "licenseUrl": "https://creativecommons.org/licenses/by/2.0",
+      "categories": [
+        "glasses",
+        "flyaway hair"
+      ],
+      "attribution": "Donna Strickland EM1B5760 (46183560632) (cropped).jpg — Bengt Nyman; crop by Gaia Octavia Agrippa — CC BY 2.0",
+      "verified": "2026-09-16",
+      "changes": "Benchmark outputs crop, resize, mask, sharpen, and composite the source; originals are retained. Derived images retain the source license."
+    },
+    {
+      "id": "portrait-5",
+      "file": "portrait-5.jpg",
+      "title": "Julianne Moore-60954.jpg",
+      "source": "https://commons.wikimedia.org/wiki/File:Julianne_Moore-60954.jpg",
+      "url": "https://upload.wikimedia.org/wikipedia/commons/d/d0/Julianne_Moore-60954.jpg",
+      "sha256": "f72ae1793b69b6f0fa195acf3560da1400df56414c3fa715408a519a74c1a204",
+      "bytes": 1430336,
+      "license": "CC BY-SA 4.0",
+      "author": "Harald Krichel",
+      "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+      "categories": [
+        "low contrast",
+        "dark background"
+      ],
+      "attribution": "Julianne Moore-60954.jpg — Harald Krichel — CC BY-SA 4.0",
+      "verified": "2026-09-16",
+      "changes": "Benchmark outputs crop, resize, mask, sharpen, and composite the source; originals are retained. Derived images retain the source license."
+    },
+    {
+      "id": "portrait-6",
+      "file": "portrait-6.jpg",
+      "title": "Mary Beard UC3M 2017 (cropped).JPG",
+      "source": "https://commons.wikimedia.org/wiki/File:Mary_Beard_UC3M_2017_%28cropped%29.JPG",
+      "url": "https://upload.wikimedia.org/wikipedia/commons/2/21/Mary_Beard_UC3M_2017_%28cropped%29.JPG",
+      "sha256": "bbb7ad8ee568b77ce169444334ac47fbb7edf1b20e98f793b094a8fc95bf7203",
+      "bytes": 252291,
+      "license": "CC BY 3.0",
+      "author": "UC3M (YouTube); frame extraction and crop uploaded by Up and Go",
+      "licenseUrl": "https://creativecommons.org/licenses/by/3.0",
+      "categories": [
+        "pale background",
+        "low contrast",
+        "flyaway hair",
+        "frame-edge subject"
+      ],
+      "attribution": "Mary Beard UC3M 2017 (cropped).JPG — UC3M (YouTube); frame extraction and crop uploaded by Up and Go — CC BY 3.0",
+      "verified": "2026-09-16",
+      "changes": "Benchmark outputs crop, resize, mask, sharpen, and composite the source; originals are retained. Derived images retain the source license."
+    }
+  ]
+}

@@ -7,3 +7,7 @@
 !assets/models/*.json
 __pycache__/
 .DS_Store
+
+/benchmarks/photos/
+/benchmarks/reports/
+/recovery/

@@ -432,6 +432,28 @@ python3 scripts/test_cli.py build/gibbonpfp
 GIBBON_TEST_SCREENSHOTS=/tmp/gibbon-ui-checks ctest --preset dev -R controller
 ```
 
+### Public portrait benchmarks
+
+```bash
+python3 scripts/benchmark.py --download
+# Explicit opt-in only; requires the separately installed quality model.
+python3 scripts/benchmark.py --quality --output ~/.cache/gibbon-benchmarks/reports/quality
+```
+
+The six [pinned Commons portraits](benchmarks/portraits.json) include attribution,
+license links, checksums, and visual challenge categories. Downloads and reports
+stay under `~/.cache/gibbon-benchmarks`, outside Git. The runner uses `gibbon_core`
+with fixed 360 × 480 PNG, 65% export / 55% removal context, zero feather, and
+Standard sharpening. Each image has a cold model/cache run and three warmed runs;
+OS disk caches are uncontrolled. Reports include stage timings, devices, cache
+reuse, sampled RSS where available, and process-lifetime peak memory where
+supported. GPU memory is explicitly unavailable. The source/mask/black/white
+contact sheet needs visual review; no ground-truth accuracy score is calculated.
+Derived images carry the source license and an attribution/changes file.
+Local installation runs Fast whenever these public fixtures are cached. It never
+implicitly downloads benchmark portraits or runs High Quality. Development needs
+`curl` for downloading; the native runner builds with `BUILD_TESTING=ON`.
+
 Validation includes core/controller tests, CLI integration, and native Qt
 screenshots. Browser tools do not inspect this desktop interface. The screenshot
 above is Linux evidence; it does not establish Windows/macOS visual equivalence.

@@ -13,6 +13,7 @@ cmake -S "$project_dir" -B "$build_dir" -G Ninja \
 cmake --build "$build_dir" --parallel "${GIBBON_BUILD_JOBS:-3}"
 ctest --test-dir "$build_dir" --output-on-failure
 python3 "$project_dir/scripts/test_cli.py" "$build_dir/gibbonpfp"
+python3 "$project_dir/scripts/benchmark.py" --engine "$build_dir/gibbon_benchmark" --if-cached
 cmake --install "$build_dir"
 # Desktop launchers do not always inherit ~/.local/bin in PATH.
 python3 - "$install_prefix" <<'PY'
