@@ -71,7 +71,7 @@ class CoreTests : public QObject {
         s.feather = 2;
         s.sharpenScreen = false;
         s.strokes = QJsonArray{QJsonObject{{"keep", true}, {"radius", .1},
-            {"points", QJsonArray{QJsonObject{{"x", .5}, {"y", .5}}}}}};
+            {"points", QJsonArray{QJsonValue(QJsonArray{.5, .5})}}}};
         auto edited = engine.process(path, s);
         QCOMPARE(engine.cacheStats().misses, misses);
         engine.clearProcessingCache();
@@ -357,9 +357,15 @@ class CoreTests : public QObject {
         s.autoCrop = false;
         s.background = "fast";
         s.format = "png";
+        // append avoids single-element list initialization selecting the array copy
+        // constructor on older compilers and flattening the point list.
+        QJsonArray points;
+        points.append(QJsonArray{.5, .5});
+        QCOMPARE(points.size(), 1);
+        QVERIFY(points.first().isArray());
         s.strokes = QJsonArray{
-            QJsonObject{{"points", QJsonArray{QJsonArray{.5, .5}}}, {"radius", .2}, {"keep", true}},
-            QJsonObject{{"points", QJsonArray{QJsonArray{.5, .5}}}, {"radius", .025}, {"keep", false}}};
+            QJsonObject{{"points", points}, {"radius", .2}, {"keep", true}},
+            QJsonObject{{"points", points}, {"radius", .025}, {"keep", false}}};
         Engine engine;
         for (double feather : {0., 10.}) {
             s.feather = feather;

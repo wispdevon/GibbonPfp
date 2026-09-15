@@ -475,6 +475,9 @@ Local installation runs Fast whenever these public fixtures are cached. It never
 implicitly downloads benchmark portraits or runs High Quality. Development needs
 `curl` for downloading; the native runner builds with `BUILD_TESTING=ON`.
 
+CI saves CTest text logs and JUnit results in a `test-results-<platform>` artifact,
+including failed runs. Windows test executables also print assertions to the console.
+
 Validation includes core/controller tests, CLI integration, and native Qt
 screenshots. Browser tools do not inspect this desktop interface. The screenshot
 above is Linux evidence; it does not establish Windows/macOS visual equivalence.

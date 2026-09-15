@@ -139,6 +139,8 @@ if(BUILD_TESTING)
   qt_add_executable(controller_tests tests/controller_tests.cpp src/controller.cpp src/recovery.cpp src/controller.h)
   target_link_libraries(controller_tests PRIVATE gibbon_core Qt6::Quick Qt6::QuickControls2 Qt6::Concurrent Qt6::Test)
   target_compile_definitions(controller_tests PRIVATE GIBBON_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
+  # Keep QtTest assertions and benchmark diagnostics visible on Windows.
+  set_target_properties(core_tests controller_tests gibbon_benchmark PROPERTIES WIN32_EXECUTABLE FALSE)
   add_test(NAME controller COMMAND controller_tests)
   set_tests_properties(controller PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen;QT_QUICK_BACKEND=software")
 endif()
