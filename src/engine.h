@@ -17,6 +17,8 @@ struct Result {
 };
 class Engine {
   public:
+    void clearProcessingCache() { models.clearCache(); }
+    ProcessingCache::Stats cacheStats() const { return models.cacheStats(); }
     QString inferenceStatus() const { return models.inferenceStatus(); }
     bool highQualityLoaded() const {
         return models.highQualityLoaded();

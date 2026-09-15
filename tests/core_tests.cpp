@@ -15,6 +15,78 @@ using namespace gibbon;
 class CoreTests : public QObject {
     Q_OBJECT
   private slots:
+    void cacheOwnershipAndEviction() {
+        cv::Mat value(10, 10, CV_32F, cv::Scalar(.4));
+        ProcessingCache measured;
+        measured.put("one", value);
+        const auto budget = measured.statistics().bytes * 2 + 8;
+        ProcessingCache cache(budget);
+        cache.put("one", value);
+        value.setTo(0);
+        auto first = std::get<cv::Mat>(*cache.get("one"));
+        QVERIFY(std::abs(first.at<float>(0, 0) - .4f) < 1e-6);
+        first.setTo(1);
+        QVERIFY(std::abs(std::get<cv::Mat>(*cache.get("one")).at<float>(0, 0) - .4f) < 1e-6);
+        cache.put("two", value);
+        QVERIFY(cache.get("one")); // one is most recently used
+        cache.put("three", value);
+        QVERIFY(!cache.get("two"));
+        QVERIFY(cache.get("one"));
+        QVERIFY(cache.statistics().bytes <= budget);
+        QVERIFY(cache.statistics().evictions > 0);
+        cache.clear();
+        QCOMPARE(cache.statistics().bytes, size_t(0));
+    }
+    void cachedProcessing() {
+        QTemporaryDir dir;
+        const auto path = dir.filePath("portrait.png");
+        QImage input(120, 160, QImage::Format_RGB32);
+        input.fill(QColor(130, 100, 80));
+        QVERIFY(input.save(path));
+        Settings s;
+        s.autoCrop = false;
+        s.background = "fast";
+        s.format = "png";
+        Engine engine;
+        auto cold = engine.process(path, s);
+        const auto misses = engine.cacheStats().misses;
+        auto warm = engine.process(path, s);
+        QCOMPARE(cold.encoded, warm.encoded);
+        QCOMPARE(engine.cacheStats().misses, misses);
+        QVERIFY(engine.cacheStats().hits > 0);
+        s.brightness = .2;
+        s.feather = 2;
+        s.sharpenScreen = false;
+        s.strokes = QJsonArray{QJsonObject{{"keep", true}, {"radius", .1},
+            {"points", QJsonArray{QJsonObject{{"x", .5}, {"y", .5}}}}}};
+        auto edited = engine.process(path, s);
+        QCOMPARE(engine.cacheStats().misses, misses);
+        engine.clearProcessingCache();
+        QCOMPARE(edited.encoded, engine.process(path, s).encoded);
+        auto before = engine.cacheStats().misses;
+        s.crop = QRectF(.1, .1, .6, .6);
+        engine.process(path, s);
+        QVERIFY(engine.cacheStats().misses > before);
+        before = engine.cacheStats().misses;
+        input.fill(Qt::white);
+        QVERIFY(input.save(path));
+        engine.process(path, s);
+        QVERIFY(engine.cacheStats().misses > before);
+        std::atomic_bool cancelled{true};
+        QVERIFY_EXCEPTION_THROWN(engine.process(path, s, &cancelled), std::runtime_error);
+        QCOMPARE(engine.cacheStats().bytes, size_t(0));
+        Models models;
+        cv::Mat rgb(60, 80, CV_32FC3, cv::Scalar(.4, .4, .4));
+        models.mask(rgb, "fast", "head");
+        models.mask(rgb, "fast", "export");
+        QCOMPARE(models.cacheStats().misses, size_t(2));
+        auto faces = models.faces(rgb);
+        QCOMPARE(models.faces(rgb), faces);
+        QCOMPARE(models.cacheStats().hits, size_t(1));
+        const auto bytes = models.cacheStats().bytes;
+        QVERIFY_EXCEPTION_THROWN(models.mask(rgb, "quality", "export", &cancelled), std::runtime_error);
+        QCOMPARE(models.cacheStats().bytes, bytes);
+    }
     void inferenceDevices() {
         cv::Mat rgb(96, 72, CV_32FC3, cv::Scalar(.4, .4, .4));
         Models automatic;

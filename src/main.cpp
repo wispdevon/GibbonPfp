@@ -75,11 +75,11 @@ int main(int argc, char **argv) {
     if (cli)
         qputenv("QT_COMMAND_LINE_PARSER_NO_GUI_MESSAGE_BOXES", "1");
 #endif
-    // The workspace owns its theme. Avoid loading third-party Linux Qt theme
-    // plugins built against a different Qt, especially in portable packages.
+    // Keep the workspace theme in QML, while native dialogs use the desktop
+    // portal (and its configured FileChooser backend, e.g. GTK).
 #ifdef Q_OS_LINUX
     if (!cli)
-        qputenv("QT_QPA_PLATFORMTHEME", "generic");
+        qputenv("QT_QPA_PLATFORMTHEME", "xdgdesktopportal");
 #endif
     std::unique_ptr<QCoreApplication> application;
     if (cli)

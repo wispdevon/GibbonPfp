@@ -110,6 +110,20 @@ QString Models::install(const QString &id, std::atomic_bool *cancel,
         throw std::runtime_error("Cannot save model");
     return path;
 }
+static void checkModelCancel(std::atomic_bool *cancel) {
+    if (cancel && cancel->load()) throw std::runtime_error("Cancelled");
+}
+QByteArray Models::cacheKey(const cv::Mat &rgb, const QString &id, const QString &purpose) {
+    session(id); // Resolve the actual device before looking up compatible results.
+    QCryptographicHash hash(QCryptographicHash::Sha256);
+    const auto identity = id + ":" + purpose + ":preprocessing-v1:" +
+        entry(id)["sha256"].toString() + ":" + (cudaSessions.contains(id) ? "cuda" : "cpu") +
+        ":" + QString::number(rgb.cols) + ":" + QString::number(rgb.rows) + ":" + QString::number(rgb.type());
+    hash.addData(identity.toUtf8());
+    for (int y = 0; y < rgb.rows; ++y)
+        hash.addData(QByteArrayView(reinterpret_cast<const char *>(rgb.ptr(y)), rgb.cols * rgb.elemSize()));
+    return hash.result();
+}
 QString Models::inferenceStatus() const {
     std::lock_guard lock(statusMutex);
     QStringList lines;
@@ -215,7 +229,13 @@ std::vector<Ort::Value> Models::run(const QString &id, const cv::Mat &rgb, int s
         return run(id, rgb, size, mean, scale);
     }
 }
-std::vector<cv::Rect> Models::faces(const cv::Mat &rgb) {
+std::vector<cv::Rect> Models::faces(const cv::Mat &rgb, std::atomic_bool *cancel) {
+    checkModelCancel(cancel);
+    const auto key = cacheKey(rgb, "face", "detection");
+    if (auto cached = cache.get(key)) {
+        checkModelCancel(cancel);
+        return std::get<std::vector<cv::Rect>>(*cached);
+    }
     // YuNet 2023: fixed 640x640, BGR 0..255, outputs cls/obj/bbox/kps at strides 8,16,32.
     cv::Mat bgr;
     cv::cvtColor(rgb, bgr, cv::COLOR_RGB2BGR);
@@ -273,6 +293,8 @@ std::vector<cv::Rect> Models::faces(const cv::Mat &rgb) {
         }
     }
     std::sort(result.begin(), result.end(), [](auto &a, auto &b) { return a.area() > b.area(); });
+    checkModelCancel(cancel);
+    cache.put(cacheKey(rgb, "face", "detection"), result);
     return result;
 }
 cv::Mat Models::refineFastMask(const cv::Mat &prediction, const cv::Mat &rgb) {
@@ -303,7 +325,14 @@ cv::Mat Models::refineFastMask(const cv::Mat &prediction, const cv::Mat &rgb) {
     cv::min(refined, 1, refined);
     return refined;
 }
-cv::Mat Models::mask(const cv::Mat &rgb, const QString &method) {
+cv::Mat Models::mask(const cv::Mat &rgb, const QString &method, const QString &purpose,
+                     std::atomic_bool *cancel) {
+    checkModelCancel(cancel);
+    const auto key = cacheKey(rgb, method, purpose);
+    if (auto cached = cache.get(key)) {
+        checkModelCancel(cancel);
+        return std::get<cv::Mat>(*cached);
+    }
     bool fast = method == "fast";
     auto outputs =
         fast ? run("fast", rgb, 512, {.5f, .5f, .5f}, {2, 2, 2})
@@ -325,8 +354,11 @@ cv::Mat Models::mask(const cv::Mat &rgb, const QString &method) {
             result = (result - lo) / (hi - lo);
     }
     if (fast)
-        return refineFastMask(result, rgb);
-    cv::resize(result, result, rgb.size(), 0, 0, cv::INTER_LINEAR);
+        result = refineFastMask(result, rgb);
+    else
+        cv::resize(result, result, rgb.size(), 0, 0, cv::INTER_LINEAR);
+    checkModelCancel(cancel);
+    cache.put(cacheKey(rgb, method, purpose), result);
     return result;
 }
 } // namespace gibbon

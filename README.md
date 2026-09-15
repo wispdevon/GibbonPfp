@@ -198,7 +198,10 @@ Inter Medium is used for work text and Qt dropdown entries, DemiBold for actions
 Space Grotesk Bold for headings, and Geist Mono for dimensions and zoom readouts.
 Fonts are embedded and checked at startup. UI scaling includes controls, spacing,
 panels, and app popups, on top of Qt display scaling. Native OS file dialogs retain
-their system typography and scaling. Export dimensions do not change.
+their system typography and scaling. On Linux, import, export-folder, and session
+dialogs use the XDG desktop portal. To select GTK, install `xdg-desktop-portal-gtk`
+and set `org.freedesktop.impl.portal.FileChooser=gtk` in the `[preferred]` section
+of `~/.config/xdg-desktop-portal/portals.conf`. Export dimensions do not change.
 
 **Queue** and **Adjustments** toggle sidebars; narrow workspaces show one at a time.
 Adjustments scroll independently. **Workspace** contains sessions and model management.
@@ -302,8 +305,13 @@ It can reduce source decoding and resizing costs, but it does not reduce the
 fixed 1024 × 1024 model computation. Segmentation receives a surrounding source crop already bounded to a
 1024-pixel long edge before its model-specific resize. The original
 is released before background inference. Keeping the model loaded saves startup
-costs, but each preview still runs inference, including after feather or brightness
-changes. Use Fast for more responsive adjustments, then High Quality for the final
+costs. A shared 128 MiB in-memory LRU cache reuses face detections and automatic
+masks for compatible edits, including feather, brushes, brightness, sharpening,
+backdrop, and encoding changes. Keys include processing pixels, dimensions, model
+checksum, preprocessing version, purpose (head or export), and execution device.
+Changed source pixels or removal context trigger new inference; entries are owned
+copies before feathering and strokes. Failed or cancelled processing clears the
+cache. Decoding and export still run on each preview. Use Fast for more responsive adjustments, then High Quality for the final
 mask. There is no measured High Quality speedup from a 2 MP input cap in this app.
 
 Loaded model sessions stay cached until the app closes or the CLI process exits.

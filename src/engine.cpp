@@ -1,4 +1,5 @@
 #include "engine.h"
+#include <QScopeGuard>
 #include "codecs.h"
 #include <QBuffer>
 #include <QColorSpace>
@@ -351,6 +352,8 @@ static double medianLightness(const cv::Mat &rgb, cv::Rect face) {
     return *mid;
 }
 Result Engine::process(const QString &path, const Settings &s, std::atomic_bool *cancel) {
+    bool completed = false;
+    const auto cleanup = qScopeGuard([&] { if (!completed) models.clearCache(); });
     s.validate();
     checkCancel(cancel);
     Result r;
@@ -372,7 +375,7 @@ Result Engine::process(const QString &path, const Settings &s, std::atomic_bool 
         faces.emplace_back(450 * analysis.cols / 1200, 270 * analysis.rows / 1600,
                            300 * analysis.cols / 1200, 300 * analysis.rows / 1600);
     else if ((s.autoCrop && s.crop.isNull()) || !s.reference.isEmpty())
-        faces = models.faces(analysis);
+        faces = models.faces(analysis, cancel);
     if (s.autoCrop && s.crop.isNull()) {
         if (faces.empty())
             r.warnings << "No face detected; center crop needs review";
@@ -389,7 +392,7 @@ Result Engine::process(const QString &path, const Settings &s, std::atomic_bool 
         if (s.autoCrop && !faces.empty()) {
             auto f = faces.front();
             double top = f.y - .3 * f.height;
-            auto mask = sample ? cv::Mat() : models.mask(analysis, "fast");
+            auto mask = sample ? cv::Mat() : models.mask(analysis, "fast", "head", cancel);
             int from = std::max(0, int(f.y - .7 * f.height)), to = std::max(0, f.y);
             bool found = sample;
             if (sample)
@@ -453,7 +456,7 @@ Result Engine::process(const QString &path, const Settings &s, std::atomic_bool 
         auto ref = decode(s.reference, Settings{})
                        .scaled(960, 960, Qt::KeepAspectRatio, Qt::SmoothTransformation);
         auto refRgb = rgbMat(ref);
-        auto refFaces = models.faces(refRgb);
+        auto refFaces = models.faces(refRgb, cancel);
         if (faces.size() != 1 || refFaces.size() != 1)
             r.warnings << "Brightness matching requires one face in source and reference";
         else {
@@ -490,7 +493,7 @@ Result Engine::process(const QString &path, const Settings &s, std::atomic_bool 
     }
     if (s.background != "off") {
         checkCancel(cancel);
-        auto contextMask = models.mask(rgbMat(maskGuide), s.background);
+        auto contextMask = models.mask(rgbMat(maskGuide), s.background, "export", cancel);
         maskGuide = QImage();
         auto segmentation = cropMask(contextMask, context, region, r.outputSize);
         cv::multiply(alpha, segmentation, alpha);
@@ -565,6 +568,8 @@ Result Engine::process(const QString &path, const Settings &s, std::atomic_bool 
     r.mask = (maskImage.width() > 1200 || maskImage.height() > 1200)
                  ? maskImage.scaled(1200, 1200, Qt::KeepAspectRatio, Qt::FastTransformation)
                  : maskImage;
+    checkCancel(cancel);
+    completed = true;
     return r;
 }
 QString Engine::save(const Result &r, const QString &source, const QString &directory,
