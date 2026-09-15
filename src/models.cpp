@@ -2,10 +2,12 @@
 #include <QCoreApplication>
 #include <QCryptographicHash>
 #include <QDir>
+#include <QDebug>
 #include <QEventLoop>
 #include <QFile>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QLibrary>
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
 #include <QSaveFile>
@@ -108,18 +110,69 @@ QString Models::install(const QString &id, std::atomic_bool *cancel,
         throw std::runtime_error("Cannot save model");
     return path;
 }
+QString Models::inferenceStatus() const {
+    std::lock_guard lock(statusMutex);
+    QStringList lines;
+    for (const auto &[id, device] : devices)
+        lines << (id == "face" ? "Face" : id == "fast" ? "Fast" : "High Quality") + QString(": ") + device;
+    return lines.isEmpty() ? (qEnvironmentVariable("GIBBON_INFERENCE_DEVICE") == "cpu"
+                                 ? "CPU requested · no models loaded"
+                                 : "Automatic GPU selection · no models loaded") : lines.join("\n");
+}
+void Models::setDevice(const QString &id, const QString &device) {
+    std::lock_guard lock(statusMutex);
+    devices[id] = device;
+}
 Ort::Session &Models::session(const QString &id) {
     if (!sessions.contains(id)) {
-        Ort::SessionOptions options;
-        options.SetIntraOpNumThreads(2);
-        options.SetInterOpNumThreads(1);
-        options.SetGraphOptimizationLevel(GraphOptimizationLevel::ORT_ENABLE_ALL);
-        auto path = locate(id);
-#ifdef _WIN32
-        sessions[id] = std::make_unique<Ort::Session>(env, path.toStdWString().c_str(), options);
-#else
-        sessions[id] = std::make_unique<Ort::Session>(env, path.toUtf8().constData(), options);
+        const auto path = locate(id);
+        auto create = [&](bool cuda) {
+            Ort::SessionOptions options;
+            options.SetIntraOpNumThreads(2);
+            options.SetInterOpNumThreads(1);
+            options.SetGraphOptimizationLevel(GraphOptimizationLevel::ORT_ENABLE_ALL);
+            if (cuda) {
+#ifdef __linux__
+                // Some distribution providers dynamically resolve cuDNN without
+                // declaring it in DT_NEEDED. Preload its exported symbols first.
+                static QLibrary cudnn(QStringLiteral("libcudnn.so.9"));
+                static std::once_flag preload;
+                std::call_once(preload, [] {
+                    cudnn.setLoadHints(QLibrary::ExportExternalSymbolsHint | QLibrary::PreventUnloadHint);
+                    cudnn.load();
+                });
 #endif
+                OrtCUDAProviderOptions provider;
+                // Avoid expensive exhaustive convolution searches during first use.
+                provider.cudnn_conv_algo_search = OrtCudnnConvAlgoSearchHeuristic;
+                options.AppendExecutionProvider_CUDA(provider);
+            }
+#ifdef _WIN32
+            return std::make_unique<Ort::Session>(env, path.toStdWString().c_str(), options);
+#else
+            return std::make_unique<Ort::Session>(env, path.toUtf8().constData(), options);
+#endif
+        };
+        const auto providers = Ort::GetAvailableProviders();
+        const bool tryCuda = qEnvironmentVariable("GIBBON_INFERENCE_DEVICE") != "cpu" &&
+                             !cpuFallback.contains(id) &&
+                             std::find(providers.begin(), providers.end(), "CUDAExecutionProvider") != providers.end();
+        if (tryCuda) {
+            try {
+                sessions[id] = create(true);
+                cudaSessions.insert(id);
+                setDevice(id, "NVIDIA GPU (CUDA; unsupported operations use CPU)");
+            } catch (const Ort::Exception &e) {
+                qWarning() << "CUDA initialization failed for" << id << e.what();
+                cpuFallback.insert(id);
+            }
+        }
+        if (!sessions.contains(id)) {
+            sessions[id] = create(false);
+            setDevice(id, cpuFallback.contains(id) ? "CPU (GPU unavailable or insufficient memory)" : "CPU");
+        }
+        if (id == "quality")
+            qualityLoaded.store(true);
     }
     return *sessions.at(id);
 }
@@ -147,7 +200,20 @@ std::vector<Ort::Value> Models::run(const QString &id, const cv::Mat &rgb, int s
         names.push_back(s.GetOutputNameAllocated(i, allocator));
         outs.push_back(names.back().get());
     }
-    return s.Run(Ort::RunOptions{nullptr}, &in, &tensor, 1, outs.data(), outs.size());
+    try {
+        return s.Run(Ort::RunOptions{nullptr}, &in, &tensor, 1, outs.data(), outs.size());
+    } catch (const Ort::Exception &e) {
+        if (!cudaSessions.contains(id) || e.GetOrtErrorCode() == ORT_INVALID_ARGUMENT)
+            throw;
+        qWarning() << "CUDA inference failed; retrying on CPU for" << id << e.what();
+        cudaSessions.erase(id);
+        cpuFallback.insert(id);
+        sessions.erase(id);
+        if (id == "quality")
+            qualityLoaded.store(false);
+        setDevice(id, "Retrying on CPU after GPU failure");
+        return run(id, rgb, size, mean, scale);
+    }
 }
 std::vector<cv::Rect> Models::faces(const cv::Mat &rgb) {
     // YuNet 2023: fixed 640x640, BGR 0..255, outputs cls/obj/bbox/kps at strides 8,16,32.
@@ -209,10 +275,38 @@ std::vector<cv::Rect> Models::faces(const cv::Mat &rgb) {
     std::sort(result.begin(), result.end(), [](auto &a, auto &b) { return a.area() > b.area(); });
     return result;
 }
+cv::Mat Models::refineFastMask(const cv::Mat &prediction, const cv::Mat &rgb) {
+    // Guided reconstruction at crop resolution. Replicated borders avoid inventing
+    // transparent pixels where a foreground region meets the image boundary.
+    cv::Mat guide, probability;
+    cv::cvtColor(rgb, guide, cv::COLOR_RGB2GRAY);
+    cv::resize(prediction, probability, rgb.size(), 0, 0, cv::INTER_LINEAR);
+    const int radius = std::max(2, int(std::ceil(double(std::max(rgb.cols, rgb.rows)) / std::max(prediction.cols, prediction.rows))) * 2);
+    auto mean = [radius](const cv::Mat &input) {
+        cv::Mat output;
+        cv::boxFilter(input, output, CV_32F, {radius * 2 + 1, radius * 2 + 1},
+                      {-1, -1}, true, cv::BORDER_REPLICATE);
+        return output;
+    };
+    auto meanGuide = mean(guide), meanProbability = mean(probability);
+    cv::Mat variance = mean(guide.mul(guide)) - meanGuide.mul(meanGuide);
+    cv::max(variance, 0, variance);
+    cv::Mat covariance = mean(guide.mul(probability)) - meanGuide.mul(meanProbability);
+    cv::Mat a;
+    cv::divide(covariance, variance + 1e-4f, a);
+    cv::Mat b = meanProbability - a.mul(meanGuide);
+    cv::Mat refined = mean(a).mul(guide) + mean(b);
+    // Remove low-confidence residue in clear background / solid foreground.
+    // Keep a continuous transition for uncertain boundary pixels.
+    refined = (refined - .1f) / .8f;
+    cv::max(refined, 0, refined);
+    cv::min(refined, 1, refined);
+    return refined;
+}
 cv::Mat Models::mask(const cv::Mat &rgb, const QString &method) {
     bool fast = method == "fast";
     auto outputs =
-        fast ? run("fast", rgb, 192, {.5f, .5f, .5f}, {2, 2, 2})
+        fast ? run("fast", rgb, 512, {.5f, .5f, .5f}, {2, 2, 2})
              : run("quality", rgb, 1024, {.485f, .456f, .406f}, {1 / .229f, 1 / .224f, 1 / .225f});
     auto shape = outputs[0].GetTensorTypeAndShapeInfo().GetShape();
     if (shape.size() != 4)
@@ -221,7 +315,7 @@ cv::Mat Models::mask(const cv::Mat &rgb, const QString &method) {
     const float *p = outputs[0].GetTensorData<float>();
     cv::Mat result(h, w, CV_32F);
     for (int i = 0; i < h * w; ++i) {
-        float value = fast ? p[h * w + i] : 1.f / (1.f + std::exp(-std::clamp(p[i], -80.f, 80.f)));
+        float value = fast ? p[i] : 1.f / (1.f + std::exp(-std::clamp(p[i], -80.f, 80.f)));
         result.ptr<float>()[i] = std::clamp(value, 0.f, 1.f);
     }
     if (!fast) {
@@ -230,6 +324,8 @@ cv::Mat Models::mask(const cv::Mat &rgb, const QString &method) {
         if (hi - lo > 1e-6)
             result = (result - lo) / (hi - lo);
     }
+    if (fast)
+        return refineFastMask(result, rgb);
     cv::resize(result, result, rgb.size(), 0, 0, cv::INTER_LINEAR);
     return result;
 }

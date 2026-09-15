@@ -234,6 +234,7 @@ ApplicationWindow {
                             Layout.fillWidth: true; Layout.fillHeight: true; color: strong; radius: 12; clip: true
                             Image {
                                 id: resultImage; objectName: "resultImage"
+                                smooth: viewMode!==1
                                 anchors.fill: parent; anchors.margins: 12; fillMode: Image.PreserveAspectFit; cache: false
                                 source: outputUrl ? (viewMode===1 ? "image://photos/mask?"+backend.revision : outputUrl) : ""
                                 Checkerboard { z: -1; x: (resultImage.width-resultImage.paintedWidth)/2; y: (resultImage.height-resultImage.paintedHeight)/2; width: resultImage.paintedWidth; height: resultImage.paintedHeight }
@@ -252,7 +253,7 @@ ApplicationWindow {
                                 }
                             }
                             WorkLabel { anchors.centerIn: parent; visible: !outputUrl; text: "Export preview"; color: muted }
-                            Rectangle { anchors.fill: parent; visible: backend.busy; color: backend.dark ? "#aa151617" : "#aaefece6"
+                            Rectangle { anchors.fill: parent; visible: backend.busy && !backend.qualityConfirmationPending; color: backend.dark ? "#aa151617" : "#aaefece6"
                                 Column { anchors.centerIn: parent; spacing: 8
                                     BusyIndicator { anchors.horizontalCenter: parent.horizontalCenter; running: backend.busy }
                                     WorkLabel { text: "Updating…"; color: ink }
@@ -309,10 +310,15 @@ ApplicationWindow {
                         WorkLabel { text: "Gentle midtone adjustment with protected black and white endpoints."; color: muted; Layout.fillWidth: true; wrapMode: Text.WordWrap; font.pixelSize: 10 }
                         RowLayout { Layout.fillWidth: true; Action { text: backend.settings.reference ? "Change reference" : "Match reference…"; Layout.fillWidth: true; onClicked: referencePhoto.open() } Action { text: "Clear"; visible: !!backend.settings.reference; onClicked: {backend.set("reference","");backend.preview()} } }
                         FieldLabel { text: "Background removal" }
-                        Choice { Layout.fillWidth: true; model: ["Off · keep original", "Fast · lightweight", "High Quality · portrait"]; currentIndex: ["off","fast","quality"].indexOf(backend.settings.background); onActivated: {backend.set("background",["off","fast","quality"][currentIndex]);backend.preview()} }
+                        Choice { Layout.fillWidth: true; model: ["Off · keep original", "Fast · portrait", "High Quality · portrait"]; currentIndex: ["off","fast","quality"].indexOf(backend.settings.background); onActivated: {backend.set("background",["off","fast","quality"][currentIndex]);backend.preview()} }
+                        WorkLabel { visible: backend.settings.background!=="off"; text: "Removal uses 10 percentage points of wider crop context, where source space permits."; Layout.fillWidth: true; wrapMode: Text.WordWrap; color: muted; font.pixelSize: 11 }
                         RowLayout { visible: backend.settings.background!=="off"; Layout.fillWidth: true; Choice { Layout.fillWidth: true; model: ["Inspect", "Keep brush", "Remove brush"]; currentIndex: brushMode; onActivated: {brushMode=currentIndex;viewMode=1} } Action { text: "Clear mask"; onClicked: {backend.set("strokes",[]);backend.preview()} } }
-                        FieldLabel { visible: backend.settings.background!=="off"; text: "Edge feather · output pixels" }
-                        Slider { visible: backend.settings.background!=="off"; Layout.fillWidth: true; from: 0; to: 10; stepSize: .5; value: backend.settings.feather; Accessible.name: "Mask feather"; onMoved: backend.set("feather",value); onPressedChanged: if(!pressed)backend.preview() }
+                        RowLayout { visible: backend.settings.background!=="off"; Layout.fillWidth: true
+                            FieldLabel { text: "Edge feather" }
+                            Item { Layout.fillWidth: true }
+                            WorkLabel { objectName: "featherValue"; text: Number(featherSlider.pressed ? featherSlider.value : backend.settings.feather).toFixed(1)+" px"; color: ink; font.family: "Geist Mono"; font.pixelSize: 12 }
+                        }
+                        Slider { id: featherSlider; objectName: "featherSlider"; visible: backend.settings.background!=="off"; Layout.fillWidth: true; from: 0; to: 10; stepSize: .5; value: backend.settings.feather; Accessible.name: "Mask feather"; onMoved: backend.set("feather",value); onPressedChanged: if(!pressed)backend.preview() }
                         Disclosure { text: "RAW development"; Layout.fillWidth: true
                             content: ColumnLayout { Layout.fillWidth: true; spacing: 10
                                 FieldLabel { text: "White balance" }
@@ -397,13 +403,44 @@ ApplicationWindow {
         ColumnLayout { spacing: 12; WorkLabel { text: "Width (a multiple of 3). Height follows 3:4."; color: ink } SpinBox { font.family: "Inter"; font.weight: Font.Medium; id: customWidth; from: 3; to: 60000; stepSize: 3; value: 720; editable: true } WorkLabel { text: Math.floor(customWidth.value/3)*3+" × "+Math.floor(customWidth.value/3)*4+" px · never upscaled"; color: muted } }
         onAccepted: {backend.setSize(Math.floor(customWidth.value/3)*3,Math.floor(customWidth.value/3)*4);backend.preview()}
     }
-    WorkDialog { id: modelDialog; title: "Local portrait models"; anchors.centerIn: parent; modal: true; width: 420; standardButtons: Dialog.Close
-        ColumnLayout { width: parent.width; spacing: 16
+    Connections {
+        target: backend
+        function onHighQualityConfirmationRequested() { qualityConfirmation.open() }
+        function onChanged() { if (!backend.qualityConfirmationPending && qualityConfirmation.visible) qualityConfirmation.close() }
+    }
+    WorkDialog {
+        id: qualityConfirmation; objectName: "qualityConfirmation"
+        title: "Load High Quality?"; anchors.centerIn: parent; modal: true
+        width: Math.min(440, workspace.width-32)
+        closePolicy: Popup.CloseOnEscape
+        onRejected: backend.confirmHighQuality(false)
+        onClosed: if (backend.qualityConfirmationPending) backend.confirmHighQuality(false)
+        ColumnLayout { width: parent.width; spacing: 14
+            WorkLabel { Layout.fillWidth: true; wrapMode: Text.WordWrap; color: ink
+                text: "Load the portrait model into RAM? Allow roughly 8–10 GB of available memory. Compatible NVIDIA GPUs are used automatically; otherwise processing uses the CPU. GPU memory needs vary, and CPU processing may take tens of seconds per image. These are estimates, not guaranteed requirements."
+            }
+            WorkLabel { Layout.fillWidth: true; wrapMode: Text.WordWrap; color: ink
+                text: "Once loaded, the model stays in memory until you close GibbonPfp—even when you switch to Fast or Off. You will not be asked again while it remains loaded."
+            }
+            RowLayout { Layout.fillWidth: true
+                Action { objectName: "cancelQuality"; text: "Cancel"; Layout.fillWidth: true; onClicked: qualityConfirmation.reject() }
+                Action { objectName: "acceptQuality"; text: "Load High Quality"; primary: true; Layout.fillWidth: true; onClicked: {backend.confirmHighQuality(true);qualityConfirmation.close()} }
+            }
+        }
+    }
+    WorkDialog { id: modelDialog; objectName: "modelDialog"; title: "Local portrait models"; anchors.centerIn: parent; modal: true; width: 420; standardButtons: Dialog.Close
+        contentItem: ScrollView {
+            id: modelScroll; clip: true; contentWidth: availableWidth
+            implicitHeight: Math.min(modelContents.implicitHeight, workspace.height - 140)
+            ColumnLayout { id: modelContents; width: modelScroll.availableWidth; spacing: 16
             WorkLabel { text: "Face detection and Fast are bundled. High Quality downloads 973 MB and can use about 7 GB of memory; allow tens of seconds per photo on CPU. Photos stay on this device."; Layout.fillWidth: true; wrapMode: Text.WordWrap; color: ink }
+            WorkLabel { objectName: "inferenceStatus"; text: backend.inferenceStatus; Layout.fillWidth: true; wrapMode: Text.WordWrap; color: ink }
             WorkLabel { text: backend.modelDescription(); color: muted; font.family: "Geist Mono"; font.pixelSize: 12 }
+            WorkLabel { Layout.fillWidth: true; wrapMode: Text.WordWrap; color: muted; text: backend.highQualityLoaded ? "High Quality is loaded and cached until the app closes." : "High Quality will ask for confirmation before its first load." }
             Action { text: "Download High Quality · 973 MB"; Layout.fillWidth: true; onClicked: {modelDialog.close();backend.installModel("quality")} }
             Action { text: "Repair face detector"; Layout.fillWidth: true; onClicked: {modelDialog.close();backend.installModel("face")} }
             Action { text: "Repair Fast model"; Layout.fillWidth: true; onClicked: {modelDialog.close();backend.installModel("fast")} }
+            }
         }
     }
     } // scaled workspace

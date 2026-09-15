@@ -15,7 +15,7 @@ provide the source/relinking materials required by the selected licenses.
 | libtiff | https://gitlab.com/libtiff/libtiff | libtiff license |
 | libwebp | https://chromium.googlesource.com/webm/libwebp | BSD-3-Clause |
 | YuNet 2023 model | https://github.com/opencv/opencv_zoo/tree/main/models/face_detection_yunet | MIT |
-| PPHumanSeg 2023 model | https://github.com/opencv/opencv_zoo/tree/main/models/human_segmentation_pphumanseg | Apache-2.0 |
+| MODNet photographic portrait model | https://github.com/ZHKKKe/MODNet (ONNX conversion: https://huggingface.co/Xenova/modnet) | Apache-2.0 |
 | BiRefNet portrait model | https://github.com/ZhengPeng7/BiRefNet | MIT |
 | Inter, Space Grotesk, Geist Mono | https://github.com/google/fonts | SIL OFL-1.1 |
 

@@ -4,6 +4,7 @@
 #include <QFile>
 #include <QImageReader>
 #include <QTemporaryDir>
+#include <QScopeGuard>
 #include <QThread>
 #include <QtTest>
 #include <random>
@@ -14,6 +15,27 @@ using namespace gibbon;
 class CoreTests : public QObject {
     Q_OBJECT
   private slots:
+    void inferenceDevices() {
+        cv::Mat rgb(96, 72, CV_32FC3, cv::Scalar(.4, .4, .4));
+        Models automatic;
+        const auto mask = automatic.mask(rgb, "fast");
+        QCOMPARE(mask.size(), rgb.size());
+        QVERIFY(cv::checkRange(mask, true, nullptr, 0., 1.00001));
+        if (qEnvironmentVariableIsSet("GIBBON_EXPECT_CUDA"))
+            QVERIFY2(automatic.inferenceStatus().contains("NVIDIA GPU"),
+                     qPrintable(automatic.inferenceStatus()));
+        const auto prior = qgetenv("GIBBON_INFERENCE_DEVICE");
+        const bool existed = qEnvironmentVariableIsSet("GIBBON_INFERENCE_DEVICE");
+        const auto restore = qScopeGuard([&] {
+            if (existed) qputenv("GIBBON_INFERENCE_DEVICE", prior);
+            else qunsetenv("GIBBON_INFERENCE_DEVICE");
+        });
+        qputenv("GIBBON_INFERENCE_DEVICE", "cpu");
+        Models cpu;
+        const auto cpuMask = cpu.mask(rgb, "fast");
+        QCOMPARE(cpu.inferenceStatus(), QString("Fast: CPU"));
+        QVERIFY(cv::norm(mask, cpuMask, cv::NORM_INF) < .02);
+    }
     void relativeZoom() {
         const QRectF initial(.3, .25, .3, .3);
         const double headroom = .08;
@@ -139,6 +161,13 @@ class CoreTests : public QObject {
     }
     void settingsRoundtrip() {
         Settings s;
+        QCOMPARE(s.feather, 0.);
+        QCOMPARE(Settings::fromJson(s.json()).feather, 0.);
+        auto legacy = s.json();
+        legacy["feather"] = 1.;
+        QCOMPARE(Settings::fromJson(legacy).feather, 1.);
+        legacy.remove("feather");
+        QCOMPARE(Settings::fromJson(legacy).feather, 0.);
         s.background = "fast";
         s.brightness = .4;
         s.crop = {.1, .1, .3, .4};
@@ -149,6 +178,106 @@ class CoreTests : public QObject {
         j = s.json();
         j["width"] = 480;
         QVERIFY_EXCEPTION_THROWN(Settings::fromJson(j), std::runtime_error);
+    }
+    void backgroundContext() {
+        const QRect crop(300, 200, 330, 440);
+        const auto context = Engine::maskContext(crop, {1200, 1600}, 65, .1);
+        QVERIFY(context.contains(crop));
+        QVERIFY(qAbs(context.width() - 390) <= 1);
+        QVERIFY(qAbs(context.height() - 520) <= 1);
+        QVERIFY(qAbs((context.y() + .1 * context.height()) - (crop.y() + .1 * crop.height())) <= 1);
+        const QRect source(0, 0, 1200, 1600);
+        for (double zoom : {40., 65., 100.})
+            for (double headroom : {0., .08, .25})
+                for (const QRect frame : {QRect(0, 0, 330, 440), QRect(870, 1160, 330, 440), source}) {
+                    const auto expanded = Engine::maskContext(frame, source.size(), zoom, headroom);
+                    QVERIFY(source.contains(expanded));
+                    QVERIFY(expanded.contains(frame));
+                }
+        // Asymmetric crop offsets and a scaled model mask must map to the same
+        // source pixel centers, with no newly transparent strip at the border.
+        cv::Mat mask(400, 300, CV_32F);
+        for (int y = 0; y < mask.rows; ++y)
+            for (int x = 0; x < mask.cols; ++x)
+                mask.at<float>(y, x) = float(.01 * x + .001 * y);
+        const auto mapped = Engine::cropMask(mask, {100, 100, 600, 800},
+                                             {250, 300, 300, 400}, {150, 200});
+        QVERIFY(qAbs(mapped.at<float>(0, 0) - .85f) < 1e-5);
+        QVERIFY(qAbs(mapped.at<float>(199, 149) - 2.539f) < 1e-5);
+        mask.setTo(1);
+        const auto solid = Engine::cropMask(mask, source, crop, {360, 480});
+        QCOMPARE(cv::norm(solid, cv::Mat(480, 360, CV_32F, cv::Scalar(1)), cv::NORM_INF), 0.);
+    }
+    void contextPreservesExport() {
+        QTemporaryDir dir;
+        QFile sample(dir.filePath("sample.png"));
+        QVERIFY(sample.open(QIODevice::WriteOnly));
+        QVERIFY(sample.write(Engine::samplePortrait()) > 0);
+        sample.close();
+        Settings s;
+        s.cropZoom = 65;
+        s.headroom = .12;
+        s.format = "png";
+        s.sharpenScreen = false;
+        Engine engine;
+        const auto original = engine.process(sample.fileName(), s);
+        s.background = "fast";
+        const auto removed = engine.process(sample.fileName(), s);
+        QCOMPARE(removed.crop, original.crop);
+        QCOMPARE(removed.outputSize, original.outputSize);
+        QCOMPARE(removed.preview.convertToFormat(QImage::Format_RGB888),
+                 original.preview.convertToFormat(QImage::Format_RGB888));
+    }
+    void lightweightMaskRefinement() {
+        cv::Mat guide(480, 360, CV_32FC3, cv::Scalar(.8, .8, .8));
+        // Solid regions remain solid, including all four image edges.
+        for (const auto &[probability, expected] :
+             {std::pair{.04f, 0.f}, std::pair{.96f, 1.f}, std::pair{.5f, .5f}}) {
+            cv::Mat prediction(192, 192, CV_32F, cv::Scalar(probability));
+            const auto refined = Models::refineFastMask(prediction, guide);
+            QCOMPARE(refined.size(), guide.size());
+            QVERIFY(cv::norm(refined, cv::Mat(guide.size(), CV_32F, cv::Scalar(expected)),
+                             cv::NORM_INF) < 1e-5);
+        }
+        // Use the higher resolution source edge to sharpen a coarse prediction.
+        guide.colRange(0, 180).setTo(cv::Scalar(.1, .1, .1));
+        cv::Mat prediction(192, 192, CV_32F, cv::Scalar(.04));
+        prediction.colRange(96, 192).setTo(.96);
+        const auto refined = Models::refineFastMask(prediction, guide);
+        QVERIFY(refined.at<float>(240, 179) < .1f);
+        QVERIFY(refined.at<float>(240, 180) > .9f);
+        double lo, hi;
+        cv::minMaxLoc(refined, &lo, &hi);
+        QCOMPARE(lo, 0.);
+        QCOMPARE(hi, 1.);
+    }
+    void firmMaskBrushes() {
+        QTemporaryDir dir;
+        QImage image(360, 480, QImage::Format_RGB32);
+        image.fill(QColor("#bb9977"));
+        const auto path = dir.filePath("brush.png");
+        QVERIFY(image.save(path));
+        Settings s;
+        s.autoCrop = false;
+        s.background = "fast";
+        s.format = "png";
+        s.strokes = QJsonArray{
+            QJsonObject{{"points", QJsonArray{QJsonArray{.5, .5}}}, {"radius", .2}, {"keep", true}},
+            QJsonObject{{"points", QJsonArray{QJsonArray{.5, .5}}}, {"radius", .025}, {"keep", false}}};
+        Engine engine;
+        for (double feather : {0., 10.}) {
+            s.feather = feather;
+            const auto result = engine.process(path, s);
+            QCOMPARE(result.mask.size(), result.outputSize);
+            const int cx = (result.outputSize.width() - 1) / 2;
+            const int cy = (result.outputSize.height() - 1) / 2;
+            const int radius = int(.025 * result.outputSize.width());
+            // Fully removed right up to the brush edge, fully kept immediately outside it.
+            QCOMPARE(result.preview.pixelColor(cx + radius, cy).alpha(), 0);
+            QCOMPARE(result.preview.pixelColor(cx + radius + 1, cy).alpha(), 255);
+            QCOMPARE(result.mask.pixelColor(cx + radius, cy).red(), 0);
+            QCOMPARE(result.mask.pixelColor(cx + radius + 1, cy).red(), 255);
+        }
     }
     void dimensions() {
         Settings s;

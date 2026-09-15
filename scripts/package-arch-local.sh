@@ -24,7 +24,7 @@ recipe=recipe[:recipe.index('pkgver() {')]+recipe[recipe.index('prepare() {'):]
 recipe=recipe.replace('GibbonPfp::git+https://github.com/wispdevon/GibbonPfp.git',archive.name)
 recipe=recipe.replace("sha256sums=('SKIP'",f"sha256sums=('{hashlib.sha256(archive.read_bytes()).hexdigest()}'")
 (dest/'PKGBUILD').write_text(recipe)
-for name in ('face_detection_yunet_2023mar.onnx','human_segmentation_pphumanseg_2023mar.onnx'):
+for name in ('face_detection_yunet_2023mar.onnx','modnet-photographic.onnx'):
     shutil.copy2(root/'assets/models'/name,dest/name)
 PY
 cd "$package_dir"

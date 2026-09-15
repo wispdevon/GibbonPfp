@@ -1,5 +1,6 @@
 #include "controller.h"
 #include "fonts.h"
+#include <QCryptographicHash>
 #include <QFile>
 #include <QFontDatabase>
 #include <QJsonDocument>
@@ -8,6 +9,7 @@
 #include <QQuickItem>
 #include <QQuickStyle>
 #include <QQuickWindow>
+#include <QScopeGuard>
 #include <QSettings>
 #include <QStandardPaths>
 #include <QTemporaryDir>
@@ -23,6 +25,107 @@ class ControllerTests : public QObject {
         QSettings::setPath(QSettings::IniFormat, QSettings::UserScope, config.path());
         QQuickStyle::setStyle("Fusion");
         loadWorkspaceFonts(GIBBON_SOURCE_DIR "/assets/fonts");
+    }
+    void highQualityConsentAndCache() {
+        QTemporaryDir dir;
+        const auto priorModelDir = qgetenv("GIBBON_MODEL_DIR");
+        const bool hadModelDir = qEnvironmentVariableIsSet("GIBBON_MODEL_DIR");
+        const auto restore = qScopeGuard([&] {
+            if (hadModelDir)
+                qputenv("GIBBON_MODEL_DIR", priorModelDir);
+            else
+                qunsetenv("GIBBON_MODEL_DIR");
+        });
+        // Use the small face graph as a deliberately incompatible quality graph.
+        // It loads a real ONNX session without allocating the full portrait model.
+        QFile source(GIBBON_SOURCE_DIR "/assets/models/face_detection_yunet_2023mar.onnx");
+        QVERIFY(source.open(QIODevice::ReadOnly));
+        auto bytes = source.readAll();
+        const auto modelPath = dir.filePath("test-session.onnx");
+        QFile model(modelPath);
+        QVERIFY(model.open(QIODevice::WriteOnly));
+        QCOMPARE(model.write(bytes), bytes.size());
+        model.close();
+        QJsonObject entry{
+            {"id", "quality"},
+            {"file", "test-session.onnx"},
+            {"sha256", QString::fromLatin1(
+                           QCryptographicHash::hash(bytes, QCryptographicHash::Sha256).toHex())}};
+        QFile manifest(dir.filePath("manifest.json"));
+        QVERIFY(manifest.open(QIODevice::WriteOnly));
+        manifest.write(QJsonDocument(QJsonObject{{"models", QJsonArray{entry}}}).toJson());
+        manifest.close();
+        qputenv("GIBBON_MODEL_DIR", dir.path().toUtf8());
+        ImageStore images;
+        Controller c(&images);
+        QSignalSpy confirmation(&c, &Controller::highQualityConfirmationRequested);
+        c.loadSample();
+        QTRY_VERIFY_WITH_TIMEOUT(!c.busy(), 15000);
+        c.set("background", "quality");
+        const int revision = c.revision();
+        c.preview();
+        QVERIFY(c.qualityConfirmationPending());
+        QVERIFY(c.busy());
+        QVERIFY(!c.highQualityLoaded());
+        QCOMPARE(confirmation.count(), 1);
+        QCOMPARE(c.revision(), revision);
+        c.set("headroom", .2);
+        QCOMPARE(c.settings()["headroom"].toDouble(), .08);
+        c.confirmHighQuality(false);
+        QVERIFY(!c.busy());
+        QCOMPARE(c.revision(), revision);
+        c.batch({}, false);
+        QVERIFY(c.qualityConfirmationPending());
+        c.cancel();
+        QVERIFY(!c.busy());
+        auto output = QUrl::fromLocalFile(dir.filePath("exports"));
+        c.exportCurrent(output);
+        QVERIFY(c.qualityConfirmationPending());
+        c.confirmHighQuality(false);
+        QVERIFY(!QFileInfo::exists(output.toLocalFile()));
+        const auto session = QUrl::fromLocalFile(dir.filePath("session.json"));
+        c.saveSession(session);
+        c.loadSession(session);
+        QVERIFY(c.qualityConfirmationPending());
+        c.confirmHighQuality(false);
+        const auto preset = QUrl::fromLocalFile(dir.filePath("preset.json"));
+        c.savePreset(preset);
+        c.loadPreset(preset);
+        QVERIFY(c.qualityConfirmationPending());
+        c.confirmHighQuality(false);
+        c.preview();
+        QVERIFY(c.qualityConfirmationPending());
+        c.confirmHighQuality(true);
+        QTRY_VERIFY_WITH_TIMEOUT(!c.busy(), 15000);
+        QVERIFY(c.highQualityLoaded());
+        QVERIFY(c.message().contains("dimension", Qt::CaseInsensitive));
+        const int prompts = confirmation.count();
+        QVERIFY(QFile::remove(modelPath));
+        c.set("background", "off");
+        c.preview();
+        QTRY_VERIFY_WITH_TIMEOUT(!c.busy(), 15000);
+        QVERIFY(c.highQualityLoaded());
+        c.set("background", "quality");
+        c.preview();
+        QVERIFY(!c.qualityConfirmationPending());
+        QTRY_VERIFY_WITH_TIMEOUT(!c.busy(), 15000);
+        QCOMPARE(confirmation.count(), prompts);
+        // With the file removed, a reload would fail lookup. The dimension error
+        // proves the existing session was reused instead.
+        QVERIFY(c.message().contains("dimension", Qt::CaseInsensitive));
+        ImageStore freshImages;
+        Controller fresh(&freshImages);
+        fresh.loadSample();
+        QTRY_VERIFY_WITH_TIMEOUT(!fresh.busy(), 15000);
+        fresh.set("background", "quality");
+        fresh.preview();
+        QVERIFY(fresh.qualityConfirmationPending());
+        fresh.confirmHighQuality(true);
+        QTRY_VERIFY_WITH_TIMEOUT(!fresh.busy(), 15000);
+        QVERIFY(!fresh.highQualityLoaded());
+        fresh.preview();
+        QVERIFY(fresh.qualityConfirmationPending());
+        fresh.cancel();
     }
     void appearance() {
         QSettings().clear();
@@ -103,6 +206,12 @@ class ControllerTests : public QObject {
         const QString captures = qEnvironmentVariable("GIBBON_TEST_SCREENSHOTS");
         if (!captures.isEmpty())
             QDir().mkpath(captures);
+        window->setProperty("viewMode", 1);
+        QTest::qWait(100);
+        QCOMPARE(result->property("smooth").toBool(), false);
+        if (!captures.isEmpty())
+            QVERIFY(window->grabWindow().save(captures + "/lightweight-mask.png"));
+        window->setProperty("viewMode", 0);
         for (int scale : {80, 100, 150})
             for (bool dark : {false, true})
                 for (const auto *accent : {"graphite", "blue"}) {
@@ -177,6 +286,21 @@ class ControllerTests : public QObject {
         const double bottom = flickable->property("contentHeight").toDouble() -
                               flickable->property("height").toDouble();
         QVERIFY(bottom > 0);
+        auto *featherValue = window->findChild<QQuickItem *>("featherValue");
+        auto *featherSlider = window->findChild<QQuickItem *>("featherSlider");
+        QVERIFY(featherValue && featherSlider);
+        QCOMPARE(featherValue->property("text").toString(), QString("0.0 px"));
+        c.set("feather", 2.5);
+        QTRY_COMPARE(featherValue->property("text").toString(), QString("2.5 px"));
+        QCOMPARE(featherSlider->property("value").toDouble(), 2.5);
+        auto *flickItem = qobject_cast<QQuickItem *>(flickable);
+        QVERIFY(flickItem);
+        const double featherY = featherSlider->mapToItem(flickItem, QPointF(0, 0)).y();
+        QVERIFY(flickable->setProperty("contentY", qBound(0., featherY - 120., bottom)));
+        QTest::qWait(100);
+        if (!captures.isEmpty())
+            QVERIFY(window->grabWindow().save(captures + "/150-feather-1024.png"));
+        c.set("feather", 0.);
         QVERIFY(flickable->setProperty("contentY", bottom));
         QTest::qWait(100);
         if (!captures.isEmpty())
@@ -226,6 +350,17 @@ class ControllerTests : public QObject {
         QVERIFY(QMetaObject::invokeMethod(popup, "close"));
         QVERIFY(QMetaObject::invokeMethod(appearance, "close"));
         QTest::qWait(100);
+        auto *modelsDialog = window->findChild<QObject *>("modelDialog");
+        QVERIFY(modelsDialog);
+        QVERIFY(QMetaObject::invokeMethod(modelsDialog, "open"));
+        QTest::qWait(100);
+        QVERIFY(modelsDialog->property("height").toDouble() * c.uiScale() / 100 <= window->height());
+        auto *deviceLabel = window->findChild<QQuickItem *>("inferenceStatus");
+        QVERIFY(deviceLabel);
+        QCOMPARE(deviceLabel->property("text").toString(), c.inferenceStatus());
+        if (!captures.isEmpty())
+            QVERIFY(window->grabWindow().save(captures + "/gpu-models-150.png"));
+        QVERIFY(QMetaObject::invokeMethod(modelsDialog, "close"));
         // Crop arrows belong to the focused left pane, including after scaling.
         input->forceActiveFocus();
         double x = c.result()["cropX"].toDouble();
@@ -255,6 +390,27 @@ class ControllerTests : public QObject {
         QTest::qWait(100);
         if (!captures.isEmpty())
             QVERIFY(window->grabWindow().save(captures + "/sample-headroom-zoom.png"));
+        c.set("background", "quality");
+        c.preview();
+        QVERIFY(c.qualityConfirmationPending());
+        auto *confirmationDialog = window->findChild<QObject *>("qualityConfirmation");
+        QVERIFY(confirmationDialog);
+        QTRY_VERIFY(confirmationDialog->property("visible").toBool());
+        c.setUiScale(150);
+        window->resize(1024, 720);
+        QTest::qWait(100);
+        if (!captures.isEmpty())
+            QVERIFY(window->grabWindow().save(captures + "/quality-confirmation-150.png"));
+        auto *cancelQuality = window->findChild<QQuickItem *>("cancelQuality");
+        QVERIFY(cancelQuality);
+        auto cancelPoint =
+            cancelQuality
+                ->mapToScene(QPointF(cancelQuality->width() / 2, cancelQuality->height() / 2))
+                .toPoint();
+        QTest::mouseClick(window, Qt::LeftButton, Qt::NoModifier, cancelPoint);
+        QTRY_VERIFY(!c.qualityConfirmationPending());
+        QVERIFY(!c.busy());
+        QVERIFY(!c.highQualityLoaded());
         qDeleteAll(qml.rootObjects());
         QSettings().clear();
     }

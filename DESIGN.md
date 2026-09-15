@@ -48,6 +48,20 @@ framing without resetting the selected zoom. Keep the percentage through draggin
 undo, and sessions; report source-boundary limits. A Load sample button provides
 a flat illustrated portrait with known head geometry for demonstrating framing.
 
+Background removal uses a frame ten zoom percentage points wider than the export
+(65% → 55%, including a removal-only 30% frame at the 40% slider minimum).
+Preserve the current crop/headroom anchor, clamp context to source space, and map
+the resulting mask back to the export crop before feathering and brush edits.
+Both models use this margin; export geometry and brush coordinates stay unchanged.
+
+Edge feather uses a live Geist Mono numeric readout in output pixels, with 0.5 px
+steps from 0–10. Default to zero added blur; preserve explicit saved values.
+Feather the automatic mask before manual Keep/Remove strokes, which retain firm
+edges. Inspect masks without display smoothing or pre-enlargement.
+Fast uses MODNet at 512 × 512 and reconstructs its prediction against a source crop bounded to
+1600 px on the long edge before export resizing. Use image-guided refinement,
+solid confidence endpoints, and replicated borders to avoid artificial edge haze.
+
 Export includes a checked-by-default Sharpen for screen control, with Low, Standard,
 and High levels; Standard is the default. Apply sharpening in the shared core
 after resizing and brightness, before background composition and encoding.
@@ -68,3 +82,19 @@ hover and keyboard-focus states. Keep both image panes visible at all scales.
 Never present estimated headroom as a professional identity-photo standard.
 Show the reason when a crop needs review. An explicit per-photo approval or the
 fully automatic policy releases the hold. Settings changes invalidate approval.
+
+## High Quality model loading
+
+Before the desktop first loads High Quality into memory, present a modal
+Load High Quality? dialog describing its estimated RAM use, automatic CUDA selection, and CPU fallback.
+Offer Cancel and Load High Quality. Gate every processing entry point, including
+loaded presets/sessions and batch exports; do not start the pending operation
+until confirmed. Keep the model session cached until app exit, with no repeated
+prompts after a successful load. Failed loads may prompt again on retry. This
+confirmation is separate from per-photo framing approval and is not persisted.
+
+## Inference devices
+
+Prefer NVIDIA CUDA when the runtime supports it, retaining CPU fallback. Show
+actual session device status in Models. Keep device selection separate from
+photo settings; `GIBBON_INFERENCE_DEVICE=cpu` forces CPU until app exit.

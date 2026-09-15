@@ -268,6 +268,31 @@ QRectF Engine::zoomCrop(QRectF basis, QPointF headAnchor, double percent, double
     return {std::clamp(headAnchor.x() - width / 2, 0., 1. - width),
             std::clamp(headAnchor.y() - headroom * height, 0., 1. - height), width, height};
 }
+QRect Engine::maskContext(QRect crop, QSize sourceSize, double zoom, double headroom) {
+    // The removal-only zoom can reach 30%; the user's export slider stays 40–100%.
+    const double scale = std::min({zoom / (zoom - 10.),
+                                   double(sourceSize.width()) / crop.width(),
+                                   double(sourceSize.height()) / crop.height()});
+    const int width = std::max(crop.width(), int(std::floor(crop.width() * scale)));
+    const int height = std::max(crop.height(), int(std::floor(crop.height() * scale)));
+    const int x = std::clamp(crop.x() - (width - crop.width()) / 2, 0, sourceSize.width() - width);
+    const int y = std::clamp(crop.y() - int(std::round(headroom * (height - crop.height()))),
+                             0, sourceSize.height() - height);
+    return {x, y, width, height};
+}
+cv::Mat Engine::cropMask(const cv::Mat &mask, QRect context, QRect crop, QSize outputSize) {
+    // Map pixel centers directly; avoid rounding a low-resolution mask ROI, which
+    // would shift brush/image alignment when crop or pane dimensions change.
+    const double sx = double(mask.cols) / context.width() * crop.width() / outputSize.width();
+    const double sy = double(mask.rows) / context.height() * crop.height() / outputSize.height();
+    const double tx = double(crop.x() - context.x()) * mask.cols / context.width() + (sx - 1) / 2;
+    const double ty = double(crop.y() - context.y()) * mask.rows / context.height() + (sy - 1) / 2;
+    cv::Mat output;
+    cv::warpAffine(mask, output, cv::Matx23d(sx, 0, tx, 0, sy, ty),
+                   {outputSize.width(), outputSize.height()},
+                   cv::INTER_LINEAR | cv::WARP_INVERSE_MAP, cv::BORDER_REPLICATE);
+    return output;
+}
 cv::Mat Engine::sharpenForScreen(const cv::Mat &rgb, const cv::Mat &alpha, const QString &level,
                                  std::atomic_bool *cancel) {
     // Output-scale, alpha-normalized luminance unsharp mask. These are our own
@@ -443,8 +468,19 @@ Result Engine::process(const QString &path, const Settings &s, std::atomic_bool 
     r.review = !r.warnings.isEmpty() && !s.automatic && !s.approved;
     checkCancel(cancel);
     r.outputSize = outputSize(region.size(), s);
-    auto cut =
-        source.copy(region).scaled(r.outputSize, Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
+    auto sourceCrop = source.copy(region);
+    auto cut = sourceCrop.scaled(r.outputSize, Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
+    QImage maskGuide;
+    QRect context = region;
+    if (s.background != "off") {
+        context = maskContext(region, source.size(), s.cropZoom, s.headroom);
+        auto expanded = source.copy(context);
+        const int limit = s.background == "fast" ? 1600 : 1024;
+        maskGuide = expanded.width() > limit || expanded.height() > limit
+                        ? expanded.scaled(limit, limit, Qt::KeepAspectRatio, Qt::SmoothTransformation)
+                        : expanded;
+    }
+    sourceCrop = QImage();
     source = QImage();
     cv::Mat rgb = rgbMat(cut), alpha(cut.height(), cut.width(), CV_32F);
     for (int y = 0; y < cut.height(); ++y) {
@@ -454,8 +490,13 @@ Result Engine::process(const QString &path, const Settings &s, std::atomic_bool 
     }
     if (s.background != "off") {
         checkCancel(cancel);
-        auto segmentation = models.mask(rgb, s.background);
+        auto contextMask = models.mask(rgbMat(maskGuide), s.background);
+        maskGuide = QImage();
+        auto segmentation = cropMask(contextMask, context, region, r.outputSize);
         cv::multiply(alpha, segmentation, alpha);
+        // Feather the automatic mask; manual corrections remain explicit keep/remove pixels.
+        if (s.feather > 0)
+            cv::GaussianBlur(alpha, alpha, {0, 0}, s.feather);
         for (const auto &value : s.strokes) {
             auto stroke = value.toObject();
             auto points = stroke["points"].toArray();
@@ -480,8 +521,6 @@ Result Engine::process(const QString &path, const Settings &s, std::atomic_bool 
                 first = false;
             }
         }
-        if (s.feather > 0)
-            cv::GaussianBlur(alpha, alpha, {0, 0}, s.feather);
     }
     for (int y = 0; y < rgb.rows; ++y) {
         if (y % 32 == 0)
@@ -523,7 +562,9 @@ Result Engine::process(const QString &path, const Settings &s, std::atomic_bool 
         throw std::runtime_error(writer.errorString().toStdString());
     r.preview = QImage::fromData(r.encoded);
     r.encodedBytes = r.encoded.size();
-    r.mask = maskImage.scaled(1200, 1200, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+    r.mask = (maskImage.width() > 1200 || maskImage.height() > 1200)
+                 ? maskImage.scaled(1200, 1200, Qt::KeepAspectRatio, Qt::FastTransformation)
+                 : maskImage;
     return r;
 }
 QString Engine::save(const Result &r, const QString &source, const QString &directory,

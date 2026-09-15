@@ -323,8 +323,35 @@ void Controller::showResult(const Result &r, int row) {
     }
     ++generation;
 }
+bool Controller::allowHighQuality(bool needed, std::function<void()> resume) {
+    if (!needed || engine.highQualityLoaded() || qualityConsent)
+        return true;
+    pendingQualityAction = std::move(resume);
+    working = true; // Freeze the pending operation's photo/settings until resolved.
+    status = "Confirm loading High Quality into memory";
+    emit changed();
+    emit highQualityConfirmationRequested();
+    return false;
+}
+void Controller::confirmHighQuality(bool accept) {
+    if (!pendingQualityAction)
+        return;
+    auto resume = std::move(pendingQualityAction);
+    pendingQualityAction = {};
+    working = false;
+    if (accept) {
+        qualityConsent = true;
+        resume();
+    } else {
+        status = "High Quality load cancelled · preview unchanged; choose Fast or Off to continue "
+                 "without it";
+        emit changed();
+    }
+}
 void Controller::preview() {
     if (working || index < 0)
+        return;
+    if (!allowHighQuality(queue[index].settings.background == "quality", [this] { preview(); }))
         return;
     working = true;
     cancelled = false;
@@ -340,6 +367,7 @@ void Controller::preview() {
     connect(w, &QFutureWatcher<Work>::finished, this, [this, w, row] {
         auto work = w->result();
         working = false;
+        qualityConsent = false;
         if (work.error.isEmpty()) {
             showResult(work.result, row);
             status = work.result.review ? "Review suggested · adjust the crop or approve it"
@@ -380,6 +408,13 @@ void Controller::processMany(QVector<int> rows, QString directory, bool exportFi
         fail("Choose an output folder");
         return;
     }
+    const bool needsQuality = std::any_of(rows.cbegin(), rows.cend(), [this](int row) {
+        return queue[row].settings.background == "quality";
+    });
+    if (!allowHighQuality(needsQuality, [this, rows, directory, exportFiles] {
+            processMany(rows, directory, exportFiles);
+        }))
+        return;
     working = true;
     cancelled = false;
     auto snapshot = queue;
@@ -389,6 +424,7 @@ void Controller::processMany(QVector<int> rows, QString directory, bool exportFi
     connect(w, &QFutureWatcher<QString>::finished, this, [this, w] {
         working = false;
         status = w->result();
+        qualityConsent = false;
         w->deleteLater();
         emit changed();
     });
@@ -575,6 +611,7 @@ void Controller::installModel(const QString &id) {
     connect(w, &QFutureWatcher<QString>::finished, this, [this, w] {
         working = false;
         status = w->result();
+        qualityConsent = false;
         w->deleteLater();
         emit changed();
     });

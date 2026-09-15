@@ -23,6 +23,9 @@ class Controller : public QObject {
     Q_PROPERTY(QVariantMap settings READ settings NOTIFY changed)
     Q_PROPERTY(QVariantMap result READ result NOTIFY changed)
     Q_PROPERTY(int current READ current WRITE setCurrent NOTIFY changed)
+    Q_PROPERTY(QString inferenceStatus READ inferenceStatus NOTIFY changed)
+    Q_PROPERTY(bool highQualityLoaded READ highQualityLoaded NOTIFY changed)
+    Q_PROPERTY(bool qualityConfirmationPending READ qualityConfirmationPending NOTIFY changed)
     Q_PROPERTY(bool busy READ busy NOTIFY changed)
     Q_PROPERTY(QString message READ message NOTIFY changed)
     Q_PROPERTY(int revision READ revision NOTIFY changed)
@@ -41,6 +44,14 @@ class Controller : public QObject {
     int current() const {
         return index;
     }
+    QString inferenceStatus() const { return engine.inferenceStatus(); }
+    bool highQualityLoaded() const {
+        return engine.highQualityLoaded();
+    }
+    bool qualityConfirmationPending() const {
+        return bool(pendingQualityAction);
+    }
+    Q_INVOKABLE void confirmHighQuality(bool accept);
     bool busy() const {
         return working;
     }
@@ -81,7 +92,10 @@ class Controller : public QObject {
     Q_INVOKABLE void batch(const QUrl &directory, bool exportFiles);
     Q_INVOKABLE void exportCurrent(const QUrl &directory);
     Q_INVOKABLE void cancel() {
-        cancelled = true;
+        if (qualityConfirmationPending())
+            confirmHighQuality(false);
+        else
+            cancelled = true;
     }
     Q_INVOKABLE void saveSession(const QUrl &url);
     Q_INVOKABLE void loadSession(const QUrl &url);
@@ -96,6 +110,7 @@ class Controller : public QObject {
   signals:
     void changed();
     void appearanceChanged();
+    void highQualityConfirmationRequested();
 
   private:
     struct Item {
@@ -116,6 +131,9 @@ class Controller : public QObject {
     QThreadPool pool;
     std::atomic_bool cancelled{false};
     gibbon::Engine engine;
+    std::function<void()> pendingQualityAction;
+    bool qualityConsent = false;
+    bool allowHighQuality(bool needed, std::function<void()> resume);
     void remember();
     void fail(const QString &error);
     void showResult(const gibbon::Result &r, int row);

@@ -17,9 +17,15 @@ struct Result {
 };
 class Engine {
   public:
+    QString inferenceStatus() const { return models.inferenceStatus(); }
+    bool highQualityLoaded() const {
+        return models.highQualityLoaded();
+    }
     Result process(const QString &path, const Settings &settings,
                    std::atomic_bool *cancel = nullptr);
     static QRectF zoomCrop(QRectF basis, QPointF headAnchor, double percent, double headroom);
+    static QRect maskContext(QRect crop, QSize sourceSize, double zoom, double headroom);
+    static cv::Mat cropMask(const cv::Mat &mask, QRect context, QRect crop, QSize outputSize);
     static cv::Mat sharpenForScreen(const cv::Mat &rgb, const cv::Mat &alpha, const QString &level,
                                     std::atomic_bool *cancel = nullptr);
     static QByteArray samplePortrait();
