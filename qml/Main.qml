@@ -18,7 +18,9 @@ ApplicationWindow {
     readonly property color line: backend.dark ? "#414447" : "#d3cec5"
     readonly property color accent: backend.buttonAccent === "blue" ? (backend.dark ? "#91B8D8" : "#315F86") : (backend.dark ? "#bfc9d1" : "#1d1f23")
     Component.onCompleted: if (backend.recoveryPending) recoveryDialog.open()
-    property int viewMode: 0
+    readonly property bool inspectingMask: maskHold.pressed && maskHold.activeFocus && win.active && maskHold.photo === backend.current
+    onActiveChanged: if (!active) maskHold.photo = -1
+    Connections { target: backend; function onChanged() { if (maskHold.photo !== backend.current || backend.busy) maskHold.photo = -1 } }
     property bool queueOpen: workspace.width >= 1100
     property bool adjustmentsOpen: workspace.width >= 900
     readonly property bool compact: workspace.height < 650
@@ -229,15 +231,15 @@ ApplicationWindow {
                         RowLayout {
                             Layout.fillWidth: true
                             Caption { text: "Result"; visible: parent.width > 180 }
-                            Choice { Layout.fillWidth: true; model: ["Result", "Mask"]; currentIndex: viewMode; onActivated: viewMode=currentIndex; Accessible.name: "Result inspection" }
+                            Action { id: maskHold; objectName: "maskHold"; property int photo: -1; Layout.fillWidth: true; text: "Hold to view mask"; enabled: !!outputUrl && !backend.busy; onPressedChanged: { if (pressed) { forceActiveFocus(); photo = backend.current } else photo = -1 } onActiveFocusChanged: if (!activeFocus) photo = -1 }
                         }
                         Rectangle {
                             Layout.fillWidth: true; Layout.fillHeight: true; color: strong; radius: 12; clip: true
                             Image {
                                 id: resultImage; objectName: "resultImage"
-                                smooth: viewMode!==1
+                                smooth: !inspectingMask
                                 anchors.fill: parent; anchors.margins: 12; fillMode: Image.PreserveAspectFit; cache: false
-                                source: outputUrl ? (viewMode===1 ? "image://photos/mask?"+backend.revision : outputUrl) : ""
+                                source: outputUrl ? (inspectingMask ? "image://photos/mask?"+backend.revision : outputUrl) : ""
                                 Checkerboard { z: -1; x: (resultImage.width-resultImage.paintedWidth)/2; y: (resultImage.height-resultImage.paintedHeight)/2; width: resultImage.paintedWidth; height: resultImage.paintedHeight }
                                 MouseArea {
                                     objectName: "brushInput"
@@ -313,7 +315,7 @@ ApplicationWindow {
                         FieldLabel { text: "Background removal" }
                         Choice { Layout.fillWidth: true; model: ["Off · keep original", "Fast · portrait", "High Quality · portrait"]; currentIndex: ["off","fast","quality"].indexOf(backend.settings.background); onActivated: {backend.set("background",["off","fast","quality"][currentIndex]);backend.preview()} }
                         WorkLabel { visible: backend.settings.background!=="off"; text: "Removal uses 10 percentage points of wider crop context, where source space permits."; Layout.fillWidth: true; wrapMode: Text.WordWrap; color: muted; font.pixelSize: 11 }
-                        RowLayout { visible: backend.settings.background!=="off"; Layout.fillWidth: true; Choice { Layout.fillWidth: true; model: ["Inspect", "Keep brush", "Remove brush"]; currentIndex: brushMode; onActivated: {brushMode=currentIndex;viewMode=1} } Action { text: "Clear mask"; onClicked: {backend.set("strokes",[]);backend.preview()} } }
+                        RowLayout { visible: backend.settings.background!=="off"; Layout.fillWidth: true; Choice { Layout.fillWidth: true; model: ["Inspect", "Keep brush", "Remove brush"]; currentIndex: brushMode; onActivated: brushMode=currentIndex } Action { text: "Clear mask"; onClicked: {backend.set("strokes",[]);backend.preview()} } }
                         RowLayout { visible: backend.settings.background!=="off"; Layout.fillWidth: true
                             FieldLabel { text: "Edge feather" }
                             Item { Layout.fillWidth: true }
@@ -346,7 +348,9 @@ ApplicationWindow {
                         Entry { Layout.fillWidth: true; placeholderText: "Filename prefix (optional)"; text: backend.settings.prefix; Accessible.name: "Filename prefix"; onEditingFinished: backend.set("prefix",text) }
                         WorkCheckBox { text: "Fully automatic batch"; checked: backend.settings.automatic; onClicked: backend.set("automatic",checked) }
                         WorkLabel { text: backend.settings.automatic ? "Uses the largest face or center crop. Warnings are recorded." : "Uncertain crops wait for your review."; Layout.fillWidth: true; wrapMode: Text.WordWrap; color: muted; font.pixelSize: 10 }
-                        Action { text: "Apply settings to selected"; Layout.fillWidth: true; onClicked: backend.applySelected() }
+                        Action { objectName: "applyAll"; text: "Apply to all"; Layout.fillWidth: true; onClicked: backend.applyAll() }
+                        WorkLabel { text: "Edits affect this photo. Apply to all resets framing and brushes on every photo; later imports inherit these settings."; Layout.fillWidth: true; wrapMode: Text.WordWrap; color: muted; font.pixelSize: 11 }
+                        Action { objectName: "exportZip"; text: "Export queue to ZIP"; Layout.fillWidth: true; enabled: hasPhoto && !backend.busy; onClicked: zipSave.open() }
                         RowLayout { Layout.fillWidth: true; Action { text: "Load preset"; Layout.fillWidth: true; onClicked: {fileAction="loadPreset";jsonOpen.open()} } Action { text: "Save preset"; Layout.fillWidth: true; onClicked: {fileAction="savePreset";jsonSave.open()} } }
                     }
                 }
@@ -395,6 +399,7 @@ ApplicationWindow {
         Action { id: toggle; text: (checked ? "− " : "+ ")+parent.text; checkable: true; Layout.fillWidth: true }
         ColumnLayout { id: holder; visible: toggle.checked; Layout.fillWidth: true }
     }
+    FileDialog { id: zipSave; title: "Export every queued photo to ZIP"; fileMode: FileDialog.SaveFile; defaultSuffix: "zip"; nameFilters: ["ZIP archive (*.zip)"]; onAccepted: backend.exportZip(selectedFile) }
     FileDialog { id: photos; title: "Add portraits"; fileMode: FileDialog.OpenFiles; nameFilters: ["Photos (*.jpg *.jpeg *.png *.webp *.heic *.heif *.tif *.tiff *.dng *.cr2 *.cr3 *.nef *.arw *.raf *.orf *.rw2 *.pef *.raw)","All files (*)"]; onAccepted: backend.add(selectedFiles) }
     FolderDialog { id: folders; title: folderAction==="import" ? "Add folder (including subfolders)" : "Choose output folder"; onAccepted: {if(folderAction==="import")backend.add([selectedFolder],true);else if(folderAction==="current")backend.exportCurrent(selectedFolder);else backend.batch(selectedFolder,true)} }
     FileDialog { id: referencePhoto; title: "Choose reference portrait"; onAccepted: backend.setReference(selectedFile) }
@@ -451,6 +456,8 @@ ApplicationWindow {
             Choice { objectName: "processingDevice"; Layout.fillWidth: true; model: ["Automatic", "CPU"]; currentIndex: backend.processingDevice === "cpu" ? 1 : 0; enabled: !backend.busy; onActivated: backend.processingDevice = currentIndex === 1 ? "cpu" : "automatic" }
             WorkLabel { visible: backend.cpuOverride; text: "GIBBON_INFERENCE_DEVICE=cpu overrides this preference until the app exits."; Layout.fillWidth: true; wrapMode: Text.WordWrap; color: muted }
             WorkLabel { objectName: "inferenceStatus"; text: backend.inferenceStatus; Layout.fillWidth: true; wrapMode: Text.WordWrap; color: ink }
+            WorkLabel { Layout.fillWidth: true; wrapMode: Text.WordWrap; color: muted; text: "Automatic tries NVIDIA CUDA when this runtime supports it. Published packages include CPU-only inference. This engine does not enable AMD/Intel GPU or Apple GPU acceleration. CPU fallback keeps processing available." }
+            WorkLabel { Layout.fillWidth: true; wrapMode: Text.WordWrap; color: muted; text: "CUDA can fail if a driver or CUDA/cuDNN library is missing or incompatible, or GPU memory is insufficient. These are possible causes; Technical details shows the actual runtime error. Release loaded models to retry after correcting the problem." }
             WorkCheckBox { id: runtimeDetails; text: "Technical details" }
             WorkLabel { visible: runtimeDetails.checked; text: backend.inferenceDetails; Layout.fillWidth: true; wrapMode: Text.WrapAnywhere; color: muted }
             Action { objectName: "releaseModels"; text: "Release loaded models"; Layout.fillWidth: true; enabled: !backend.busy; onClicked: backend.releaseModels() }

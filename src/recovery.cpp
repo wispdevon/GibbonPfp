@@ -23,6 +23,10 @@ QJsonObject Controller::validateRecovery(const QByteArray &bytes) {
         object["version"].toInt() != 1 || object["kind"] != "gibbon-recovery" ||
         !object["photos"].isArray() || !object["active"].isDouble())
         throw std::runtime_error("Invalid recovery snapshot");
+    if (object.contains("importDefaults")) {
+        if (!object["importDefaults"].isObject()) throw std::runtime_error("Invalid queue defaults");
+        Settings::fromJson(object["importDefaults"].toObject());
+    }
     const auto photos = object["photos"].toArray();
     int active = object["active"].toInt(-2);
     if (active < -1 || active >= photos.size() || (!photos.isEmpty() && active < 0))
@@ -41,7 +45,7 @@ QJsonObject Controller::recoveryJson() const {
     for (const auto &q : queue)
         photos.append(QJsonObject{{"source", q.path}, {"fingerprint", q.fingerprint},
                                   {"settings", q.settings.json()}, {"selected", q.selected}});
-    return {{"version", 1}, {"kind", "gibbon-recovery"}, {"active", index}, {"photos", photos}};
+    return {{"version", 1}, {"kind", "gibbon-recovery"}, {"active", index}, {"photos", photos}, {"importDefaults", importDefaults.json()}};
 }
 void Controller::initializeRecovery(const QString &directory) {
     // Ordinary unit tests must not read/write the user's recovery workspace.
@@ -136,12 +140,15 @@ void Controller::resolveRecovery(bool restore) {
             }
             restored.append(item);
         }
+        importDefaults = Settings::fromJson(recoverySnapshot["importDefaults"].toObject());
+        importDefaults.crop = {}; importDefaults.cropBasis = {}; importDefaults.strokes = {}; importDefaults.approved = false;
         queue = restored;
         index = recoverySnapshot["active"].toInt();
         details.clear();
         status = "Workspace restored · refresh a preview when ready";
     } else {
         queue.clear();
+        importDefaults = Settings{};
         index = -1;
         details.clear();
         status = "Started fresh · add portraits to get started";

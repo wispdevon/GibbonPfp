@@ -37,7 +37,7 @@ decorative heroes, pills for ordinary commands, and distracting idle animation.
 
 Output previews are decoded from the actual JPEG/PNG bytes. The left pane shows
 the finished export inside the editable crop, over a dimmed
-full source. The right pane offers Result/Mask inspection and crop-coordinate
+full source. The right pane offers hold-to-view mask inspection and crop-coordinate
 brushes. Both share one completed output revision; mark pending work as Updating.
 Use a checkerboard behind transparent pixels. Keyboard navigation, tool labels,
 visible focus, and non-drag crop zoom controls remain available. Crop zoom is
@@ -113,3 +113,17 @@ Restore if both are corrupt. Restore metadata before processing; missing files
 stay in the queue and changed source fingerprints invalidate approval. Display
 a persistent autosave error when the lock cannot be acquired or a write fails.
 High Quality consent and processing caches never persist.
+
+## Queue application and ZIP export
+
+Factory settings use 70% crop zoom, 8% headroom, Fast removal, white JPEG at quality
+80, and Standard screen sharpening. Edits stay local until Apply to all. Applying
+copies controls to every photo, resets manual framing and strokes, invalidates
+approvals, and sets defaults for future imports. Refresh the active photo immediately
+and other photos when viewed or processed. Undo remains per photo.
+
+Hold to view mask works with pointer or keyboard Space, returning to the composite
+on release, focus loss, or photo change. Selecting brushes does not latch mask view.
+Export queue to ZIP lives in Export controls and uses the native save dialog. All
+photos must pass processing and review before the archive is atomically published;
+cancellation and failures leave the existing destination intact. Include an export report.

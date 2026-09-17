@@ -16,6 +16,7 @@ pkgbase = gibbonpfp-git
 	depends = qt6-declarative
 	depends = opencv
 	depends = onnxruntime
+	depends = libarchive
 	depends = libraw
 	depends = libheif
 	depends = libtiff

@@ -1,4 +1,6 @@
 #include "engine.h"
+#include "zip_export.h"
+#include <QProcess>
 #include <QBuffer>
 #include <QColorSpace>
 #include <QFile>
@@ -15,6 +17,50 @@ using namespace gibbon;
 class CoreTests : public QObject {
     Q_OBJECT
   private slots:
+    void newDefaultsAndAtomicZip() {
+        Settings defaults;
+        QCOMPARE(defaults.cropZoom, 70.);
+        QCOMPARE(defaults.headroom, .08);
+        QCOMPARE(defaults.quality, 80);
+        QCOMPARE(defaults.background, QString("fast"));
+        QCOMPARE(defaults.format, QString("jpeg"));
+        QCOMPARE(defaults.backgroundColor, QColor(Qt::white));
+        QVERIFY(defaults.sharpenScreen);
+        QCOMPARE(defaults.sharpening, QString("standard"));
+        QTemporaryDir dir;
+        auto path = dir.filePath("portraits.zip");
+        QFile original(path);
+        QVERIFY(original.open(QIODevice::WriteOnly));
+        original.write("original"); original.close();
+        { ZipExport aborted(path); aborted.addPhoto("test.jpg", "", "jpeg", "bytes"); }
+        QVERIFY(original.open(QIODevice::ReadOnly));
+        QCOMPARE(original.readAll(), QByteArray("original")); original.close();
+        std::atomic_bool cancelled{false};
+        {
+            ZipExport aborted(path, &cancelled);
+            cancelled = true;
+            QVERIFY_EXCEPTION_THROWN(aborted.commit("[]"), std::runtime_error);
+        }
+        QVERIFY(original.open(QIODevice::ReadOnly));
+        QCOMPARE(original.readAll(), QByteArray("original")); original.close();
+        QVERIFY_EXCEPTION_THROWN(ZipExport(dir.filePath("missing/photos.zip")), std::runtime_error);
+        QImage image(12, 16, QImage::Format_RGB32); image.fill(Qt::white);
+        QByteArray bytes; QBuffer buffer(&bytes); buffer.open(QIODevice::WriteOnly);
+        QVERIFY(image.save(&buffer, "JPEG"));
+        {
+            ZipExport zip(path);
+            const auto one = zip.addPhoto("one/肖像.jpg", "", "jpeg", bytes);
+            const auto two = zip.addPhoto("two/肖像.jpg", "", "jpeg", bytes);
+            QVERIFY(one != two);
+            QVERIFY(!one.contains('/'));
+            zip.commit("[]");
+        }
+        QProcess reader;
+        reader.start("python", {"-c", "import sys,zipfile,json; z=zipfile.ZipFile(sys.argv[1]); assert z.testzip() is None; n=z.namelist(); assert len(n)==3 and n[-1]=='export-report.json'; assert n[0]!=n[1]; assert all(z.read(p).startswith(bytes.fromhex('ffd8')) for p in n[:2]); assert json.loads(z.read(n[-1]))==[]; open(sys.argv[1]+'.jpg','wb').write(z.read(n[0]))", path});
+        QVERIFY(reader.waitForFinished());
+        QVERIFY2(reader.exitCode() == 0, reader.readAllStandardError().constData());
+        QCOMPARE(QImage(path + ".jpg"), QImage::fromData(bytes));
+    }
     void cacheOwnershipAndEviction() {
         cv::Mat value(10, 10, CV_32F, cv::Scalar(.4));
         ProcessingCache measured;
@@ -118,19 +164,24 @@ class CoreTests : public QObject {
         qputenv("GIBBON_INFERENCE_DEVICE", "cpu");
         Models cpu;
         const auto cpuMask = cpu.mask(rgb, "fast");
-        QCOMPARE(cpu.inferenceStatus(), QString("Fast: CPU"));
+        QCOMPARE(cpu.inferenceStatus(), QString("Fast: CPU (launch override)"));
         cpu.release();
         QCOMPARE(cpu.cacheStats().bytes, size_t(0));
         QCOMPARE(cpu.mask(rgb, "fast").size(), rgb.size());
         Models preference;
         preference.setPreference("cpu");
         preference.mask(rgb, "fast");
-        QCOMPARE(preference.inferenceStatus(), QString("Fast: CPU"));
+        QCOMPARE(preference.inferenceStatus(), QString("Fast: CPU (launch override)"));
         preference.setPreference("automatic");
         QCOMPARE(preference.cacheStats().bytes, size_t(0));
         preference.mask(rgb, "fast"); // launch override still wins
-        QCOMPARE(preference.inferenceStatus(), QString("Fast: CPU"));
+        QCOMPARE(preference.inferenceStatus(), QString("Fast: CPU (launch override)"));
         QVERIFY(cv::norm(mask, cpuMask, cv::NORM_INF) < .02);
+        qunsetenv("GIBBON_INFERENCE_DEVICE");
+        preference.setPreference("cpu");
+        preference.mask(rgb, "fast");
+        QCOMPARE(preference.inferenceStatus(), QString("Fast: CPU (selected in Models)"));
+        QVERIFY(preference.inferenceDetails().contains("Available runtime providers:"));
     }
     void relativeZoom() {
         const QRectF initial(.3, .25, .3, .3);
@@ -183,6 +234,7 @@ class CoreTests : public QObject {
         QVERIFY(image.save(path));
         Settings settings;
         settings.autoCrop = false;
+        settings.background = "off";
         settings.format = "png";
         QVERIFY(settings.sharpenScreen);
         QCOMPARE(Settings::fromJson(settings.json()).sharpening, "standard");
@@ -435,6 +487,8 @@ class CoreTests : public QObject {
         QVERIFY(i.save(input));
         Settings s;
         s.autoCrop = false;
+        s.cropZoom = 100;
+        s.background = "off";
         Engine engine;
         auto r = engine.process(input, s);
         QCOMPARE(r.outputSize, QSize(360, 480));
@@ -455,6 +509,8 @@ class CoreTests : public QObject {
         QVERIFY(image.save(path));
         Settings s;
         s.autoCrop = false;
+        s.cropZoom = 100;
+        s.background = "off";
         s.format = "png";
         s.crop = {.1, .1, .5, .5};
         Engine e;

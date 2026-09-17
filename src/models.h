@@ -43,6 +43,7 @@ class Models {
     std::map<QString, QString> devices;
     std::set<QString> cpuFallback;
     std::set<QString> cudaSessions;
+    std::map<QString, QString> fallbackReasons;
     void setDevice(const QString &id, const QString &device);
     std::atomic_bool qualityLoaded{false};
     Ort::Env env{ORT_LOGGING_LEVEL_ERROR, "gibbonpfp"};

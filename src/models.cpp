@@ -134,6 +134,7 @@ void Models::release() {
     qualityLoaded.store(false);
     std::lock_guard lock(statusMutex);
     devices.clear();
+    fallbackReasons.clear();
     diagnostics.clear();
 }
 void Models::setPreference(const QString &value) {
@@ -145,6 +146,10 @@ void Models::setPreference(const QString &value) {
 QString Models::inferenceDetails() const {
     std::lock_guard lock(statusMutex);
     QStringList lines;
+    QStringList providers;
+    for (const auto &provider : Ort::GetAvailableProviders()) providers << QString::fromStdString(provider);
+    lines << "Available runtime providers: " + providers.join(", ");
+    if (diagnostics.empty()) lines << "No runtime errors reported.";
     for (const auto &[id, message] : diagnostics) lines << id + ": " + message;
     return lines.isEmpty() ? "No runtime errors reported." : lines.join("\n");
 }
@@ -204,14 +209,15 @@ Ort::Session &Models::session(const QString &id) {
             } catch (const Ort::Exception &e) {
                 qWarning() << "CUDA initialization failed for" << id << e.what();
                 cpuFallback.insert(id);
+                fallbackReasons[id] = "CUDA initialization failed";
                 std::lock_guard lock(statusMutex);
                 diagnostics[id] = QString::fromUtf8(e.what());
             }
         }
         if (!sessions.contains(id)) {
             sessions[id] = create(false);
-            setDevice(id, cpuFallback.contains(id) ? "CPU (GPU initialization or execution failed)" :
-                          cpuRequested() ? "CPU" : "CPU (CUDA provider unavailable in this runtime)");
+            setDevice(id, cpuFallback.contains(id) ? "CPU (" + fallbackReasons[id] + "; see Technical details)" :
+                          cpuRequested() ? (qEnvironmentVariable("GIBBON_INFERENCE_DEVICE") == "cpu" ? "CPU (launch override)" : "CPU (selected in Models)") : "CPU (this runtime has no CUDA provider)");
         }
         if (id == "quality")
             qualityLoaded.store(true);
@@ -251,6 +257,7 @@ std::vector<Ort::Value> Models::run(const QString &id, const cv::Mat &rgb, int s
         { std::lock_guard lock(statusMutex); diagnostics[id] = QString::fromUtf8(e.what()); }
         cudaSessions.erase(id);
         cpuFallback.insert(id);
+        fallbackReasons[id] = "CUDA inference failed";
         sessions.erase(id);
         if (id == "quality")
             qualityLoaded.store(false);

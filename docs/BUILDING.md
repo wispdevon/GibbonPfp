@@ -17,7 +17,7 @@ current build/package results. A configuration alone is not proof of validation.
 
 Install Qt 6.8.3 with Qt Quick, Quick Controls, Network, and Concurrent, CMake 3.24+,
 Ninja, Python 3.10+, and a C++20 compiler. For local builds, compatible system
-OpenCV, ONNX Runtime, LibRaw, libheif, libtiff, and libwebp packages also work.
+OpenCV, ONNX Runtime, LibArchive, LibRaw, libheif, libtiff, and libwebp packages also work.
 
 For release builds, clone vcpkg at the commit in `vcpkg.json`, bootstrap it, and set
 `VCPKG_ROOT`. Use the checked-in dynamic triplet for your platform:

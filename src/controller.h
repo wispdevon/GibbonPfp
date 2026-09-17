@@ -108,10 +108,11 @@ class Controller : public QObject {
     Q_INVOKABLE void undo();
     Q_INVOKABLE void reset();
     Q_INVOKABLE void select(int row, bool selected);
-    Q_INVOKABLE void applySelected();
+    Q_INVOKABLE void applyAll();
     Q_INVOKABLE void approve();
     Q_INVOKABLE void removeSelected();
     Q_INVOKABLE void batch(const QUrl &directory, bool exportFiles);
+    Q_INVOKABLE void exportZip(const QUrl &destination);
     Q_INVOKABLE void exportCurrent(const QUrl &directory);
     Q_INVOKABLE void cancel();
     Q_INVOKABLE void saveSession(const QUrl &url);
@@ -164,6 +165,7 @@ class Controller : public QObject {
     void acceptProgress(quint64 token, int photo, int total, const gibbon::Progress &progress);
     friend class ControllerTests;
     QVector<Item> queue;
+    gibbon::Settings importDefaults;
     int index = -1, generation = 0;
     int interfaceScale = 100;
     QString accentName = "graphite";
@@ -181,5 +183,5 @@ class Controller : public QObject {
     void remember();
     void fail(const QString &error);
     void showResult(const gibbon::Result &r, int row);
-    void processMany(QVector<int> rows, QString directory, bool exportFiles);
+    void processMany(QVector<int> rows, QString directory, bool exportFiles, bool zip = false);
 };

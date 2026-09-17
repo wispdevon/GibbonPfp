@@ -25,10 +25,17 @@ def main():
         root = pathlib.Path(temp)
         photo = root / 'portrait ü.png'
         png(photo, 600, 800)
-        def run(*args, code=0):
+        fixture_preset = root / 'codec-fixture.json'
+        fixture_preset.write_text(json.dumps({'background': 'off', 'cropZoom': 100}))
+        def run(*args, code=0, factory=False):
+            # Isolate codec/export fixtures from portrait segmentation and framing defaults.
+            if args and args[0] == 'process' and not factory:
+                args = (*args, '--preset', fixture_preset)
             result = subprocess.run([exe, *map(str, args)], text=True, capture_output=True, timeout=180)
             assert result.returncode == code, (args, result.returncode, result.stdout, result.stderr)
             return result.stdout
+        factory = json.loads(run('process', photo, '--output', root / 'factory', '--fully-automatic', factory=True))
+        assert 'Fast:' in factory['diagnostics']['device']
         diagnostic = json.loads(run('process', photo, '--output', root / 'diagnostic', '--no-auto-crop'))['diagnostics']
         assert diagnostic['totalMs'] > 0
         assert diagnostic['stages'][0]['stage'] == 'Decoding'

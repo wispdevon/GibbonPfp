@@ -9,6 +9,7 @@ provide the source/relinking materials required by the selected licenses.
 | Qt 6 Core/Gui/Quick/Controls/Network/Concurrent | https://www.qt.io/ | LGPL-3.0 / commercial |
 | OpenCV core/imgproc | https://github.com/opencv/opencv | Apache-2.0 |
 | ONNX Runtime | https://github.com/microsoft/onnxruntime | MIT, with third-party notices |
+| LibArchive | https://www.libarchive.org/ | BSD-2-Clause (bundled components retain their notices) |
 | LibRaw | https://www.libraw.org/ | LGPL-2.1 or CDDL-1.0 |
 | libheif | https://github.com/strukturag/libheif | LGPL-3.0 |
 | libde265 decoder | https://github.com/strukturag/libde265 | LGPL-3.0 |

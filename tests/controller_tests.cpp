@@ -29,6 +29,63 @@ class ControllerTests : public QObject {
         QQuickStyle::setStyle("Fusion");
         loadWorkspaceFonts(GIBBON_SOURCE_DIR "/assets/fonts");
     }
+    void queueDefaultsAndCompleteZip() {
+        QTemporaryDir dir;
+        QImage image(120, 160, QImage::Format_RGB32); image.fill(Qt::gray);
+        auto first = dir.filePath("first.png"), second = dir.filePath("second.png"), third = dir.filePath("third.png");
+        QVERIFY(image.save(first)); QVERIFY(image.save(second)); QVERIFY(image.save(third));
+        ImageStore images; Controller c(&images);
+        c.add({QUrl::fromLocalFile(first), QUrl::fromLocalFile(second)});
+        QTRY_VERIFY_WITH_TIMEOUT(!c.busy(), 15000);
+        c.set("brightness", .3);
+        QCOMPARE(c.queue[1].settings.brightness, 0.);
+        c.setCurrent(1); QTRY_VERIFY_WITH_TIMEOUT(!c.busy(), 15000);
+        QCOMPARE(c.settings()["brightness"].toDouble(), 0.);
+        c.setCurrent(0); QTRY_VERIFY_WITH_TIMEOUT(!c.busy(), 15000);
+        c.queue[1].selected = false;
+        c.queue[1].settings.crop = QRectF(.1, .1, .5, .5);
+        c.queue[1].settings.strokes.append(QJsonObject{{"keep", true}});
+        c.queue[1].settings.approved = true;
+        c.set("background", "off");
+        c.applyAll(); QTRY_VERIFY_WITH_TIMEOUT(!c.busy(), 15000);
+        QCOMPARE(c.queue[1].settings.brightness, .3);
+        QCOMPARE(c.queue[1].settings.cropZoom, 70.);
+        QVERIFY(c.queue[1].settings.crop.isEmpty());
+        QVERIFY(c.queue[1].settings.strokes.isEmpty());
+        QVERIFY(!c.queue[1].settings.approved);
+        c.set("brightness", .6);
+        c.add({QUrl::fromLocalFile(third)}); QTRY_VERIFY_WITH_TIMEOUT(!c.busy(), 15000);
+        QCOMPARE(c.queue[2].settings.brightness, .3);
+        const auto session = QUrl::fromLocalFile(dir.filePath("session.json"));
+        c.saveSession(session);
+        ImageStore otherImages; Controller other(&otherImages);
+        other.loadSession(session); QTRY_VERIFY_WITH_TIMEOUT(!other.busy(), 15000);
+        QCOMPARE(other.importDefaults.brightness, .3);
+        QCOMPARE(Controller::validateRecovery(QJsonDocument(c.recoveryJson()).toJson())["importDefaults"].toObject()["brightness"].toDouble(), .3);
+        auto old = c.recoveryJson(); old.remove("importDefaults");
+        QVERIFY(!Controller::validateRecovery(QJsonDocument(old).toJson()).isEmpty());
+        c.exportZip(QUrl::fromLocalFile(first));
+        QVERIFY(c.message().contains("other than a source photo"));
+        QCOMPARE(QImage(first), image);
+        auto zip = QUrl::fromLocalFile(dir.filePath("queue.zip"));
+        QFile file(zip.toLocalFile()); QVERIFY(file.open(QIODevice::WriteOnly)); file.write("existing"); file.close();
+        c.exportZip(zip); QTRY_VERIFY_WITH_TIMEOUT(!c.busy(), 15000);
+        QVERIFY(c.message().contains("ZIP not saved"));
+        QVERIFY(file.open(QIODevice::ReadOnly)); QCOMPARE(file.readAll(), QByteArray("existing")); file.close();
+        for (auto &photo : c.queue) photo.settings.approved = true;
+        c.exportZip(zip); QTRY_VERIFY_WITH_TIMEOUT(!c.busy(), 15000);
+        QVERIFY2(c.message().contains("ZIP saved · 3"), qPrintable(c.message()));
+        QProcess reader;
+        reader.start("python", {"-c", "import sys,zipfile,json; z=zipfile.ZipFile(sys.argv[1]); assert z.testzip() is None; r=json.loads(z.read('export-report.json')); assert len(r)==3 and all(p['status']=='exported' for p in r); assert len(z.namelist())==4", zip.toLocalFile()});
+        QVERIFY(reader.waitForFinished()); QVERIFY2(reader.exitCode()==0, reader.readAllStandardError().constData());
+        QVERIFY(file.open(QIODevice::ReadOnly)); auto complete = file.readAll(); file.close();
+        c.queue[1].path = dir.filePath("missing.png");
+        c.exportZip(zip); QTRY_VERIFY_WITH_TIMEOUT(!c.busy(), 15000);
+        QVERIFY(c.message().contains("ZIP not saved"));
+        QVERIFY(file.open(QIODevice::ReadOnly)); QCOMPARE(file.readAll(), complete); file.close();
+        c.exportZip(zip); c.cancel(); QTRY_VERIFY_WITH_TIMEOUT(!c.busy(), 15000);
+        QVERIFY(file.open(QIODevice::ReadOnly)); QCOMPARE(file.readAll(), complete);
+    }
     void highQualityConsentAndCache() {
         QTemporaryDir dir;
         const auto priorModelDir = qgetenv("GIBBON_MODEL_DIR");
@@ -431,12 +488,27 @@ class ControllerTests : public QObject {
         const QString captures = qEnvironmentVariable("GIBBON_TEST_SCREENSHOTS");
         if (!captures.isEmpty())
             QDir().mkpath(captures);
-        window->setProperty("viewMode", 1);
+        auto *maskHold = window->findChild<QQuickItem *>("maskHold");
+        QVERIFY(maskHold);
+        window->requestActivate();
+        maskHold->forceActiveFocus();
+        QTest::keyPress(window, Qt::Key_Space);
         QTest::qWait(100);
         QCOMPARE(result->property("smooth").toBool(), false);
         if (!captures.isEmpty())
             QVERIFY(window->grabWindow().save(captures + "/lightweight-mask.png"));
-        window->setProperty("viewMode", 0);
+        QTest::keyRelease(window, Qt::Key_Space);
+        QTRY_VERIFY(result->property("smooth").toBool());
+        const auto maskPoint = maskHold->mapToScene(QPointF(maskHold->width()/2, maskHold->height()/2)).toPoint();
+        QTest::mousePress(window, Qt::LeftButton, Qt::NoModifier, maskPoint);
+        QTRY_VERIFY(!result->property("smooth").toBool());
+        QTest::mouseRelease(window, Qt::LeftButton, Qt::NoModifier, maskPoint);
+        QTRY_VERIFY(result->property("smooth").toBool());
+        maskHold->forceActiveFocus();
+        QTest::keyPress(window, Qt::Key_Space);
+        input->forceActiveFocus();
+        QTRY_VERIFY(result->property("smooth").toBool());
+        QTest::keyRelease(window, Qt::Key_Space);
         for (int scale : {80, 100, 150})
             for (bool dark : {false, true})
                 for (const auto *accent : {"graphite", "blue"}) {
@@ -611,7 +683,7 @@ class ControllerTests : public QObject {
         QTest::mouseClick(window, Qt::LeftButton, Qt::NoModifier, samplePoint);
         QTRY_VERIFY_WITH_TIMEOUT(!c.busy(), 15000);
         QCOMPARE(c.items().size(), 2);
-        QCOMPARE(c.result()["cropZoom"].toDouble(), 100.);
+        QCOMPARE(c.result()["cropZoom"].toDouble(), 70.);
         window->setProperty("adjustmentsOpen", true);
         flickable->setProperty("contentY", 0);
         c.setCropZoom(60);
@@ -655,7 +727,7 @@ class ControllerTests : public QObject {
         c.loadSample();
         QTRY_VERIFY_WITH_TIMEOUT(!c.busy(), 15000);
         QCOMPARE(c.items().size(), 1);
-        QCOMPARE(c.result()["cropZoom"].toDouble(), 100.);
+        QCOMPARE(c.result()["cropZoom"].toDouble(), 70.);
         const auto initial = c.result();
         c.setCropZoom(60);
         QTRY_VERIFY_WITH_TIMEOUT(!c.busy(), 15000);
@@ -733,7 +805,8 @@ class ControllerTests : public QObject {
         c.setSize(720, 960);
         QCOMPARE(c.settings()["height"].toInt(), 960);
         c.set("brightness", .4);
-        c.applySelected();
+        c.applyAll();
+        QTRY_VERIFY_WITH_TIMEOUT(!c.busy(), 10000);
         c.setCurrent(1);
         QTRY_VERIFY_WITH_TIMEOUT(!c.busy(), 10000);
         QCOMPARE(c.settings()["brightness"].toDouble(), .4);
@@ -746,6 +819,8 @@ class ControllerTests : public QObject {
         QCOMPARE(other.items().size(), 2);
         QCOMPARE(other.settings()["brightness"].toDouble(), .4);
         c.set("autoCrop", false);
+        c.set("background", "off");
+        c.set("cropZoom", 100);
         c.exportCurrent(QUrl::fromLocalFile(dir.filePath("exports")));
         QTRY_VERIFY_WITH_TIMEOUT(!c.busy(), 10000);
         QVERIFY(QFile::exists(dir.filePath("exports/second-pfp.jpg")));

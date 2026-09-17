@@ -23,7 +23,7 @@ The source repository remains at `wispdevon/GibbonPfp`.
 HeadshotFlow is an offline desktop editor and command-line tool for preparing profile
 pictures. Import portraits, adjust framing and brightness, optionally remove the
 background, and export a single photo or a batch without overwriting originals.
-The default output is **360 × 480 pixels, portrait 3:4**.
+The default output is **360 × 480 pixels, portrait 3:4**, with **70% crop zoom, 8% headroom, Fast background removal, white JPEG backdrop, JPEG quality 80, and Standard screen sharpening**.
 
 ![Native HeadshotFlow workspace with the built-in sample, 12% headroom, and 60% crop zoom](docs/images/workspace.png)
 
@@ -73,7 +73,7 @@ The default output is **360 × 480 pixels, portrait 3:4**.
 ### Built with
 
 C++20 · Qt 6 Quick/QML · OpenCV · ONNX Runtime · LibRaw · libheif/libde265 ·
-libtiff · libwebp · CMake/Ninja. GUI and CLI share the same `gibbon_core` engine.
+libarchive · libtiff · libwebp · CMake/Ninja. GUI and CLI share the same `gibbon_core` engine.
 
 ## Getting started
 
@@ -130,11 +130,22 @@ See [Arch packaging](docs/BUILDING.md#arch-linux--aur-and-local-updates).
 1. **Add photos**, **Add folder**, or **Load sample**. Folder import includes subfolders.
 2. Select a portrait and adjust **Frame**, **Refine**, and **Export**.
 3. Inspect the right **Result** pane: it shows the actual decoded JPEG/PNG output.
-4. For a batch, use **Apply settings to selected**, then **Prepare selected**.
-   Individual crop geometry and zoom stay with their photos; strokes are not copied.
+4. Controls edit only the current photo; switching photos keeps each photo’s settings.
+   **Apply to all** copies the controls to every queued photo, including unchecked photos,
+   recalculates each frame, clears manual crops and brushes, and invalidates approvals.
+   Later imports inherit the last applied settings. Use **Prepare selected** to process a selection.
 5. Adjust or approve photos marked **Needs review**, or explicitly choose the
-   **Fully automatic batch** policy and apply it to the selection.
-6. Export the current photo or selected batch to an output folder.
+   **Fully automatic batch** policy and use **Apply to all**.
+6. Export the current photo or selected batch to an output folder, or choose
+   **Export queue to ZIP** in Export controls. ZIP includes every photo regardless of
+   selection, plus a JSON report. It saves only when every photo can export: review
+   holds, missing files, failures, or cancellation leave the destination unchanged.
+   Duplicate names receive suffixes. Photos are encoded one at a time.
+
+Hold **Hold to view mask** with the mouse or keyboard Space to inspect the unsmoothed
+mask. Releasing it or moving focus restores the encoded result. Brushes also work
+on the composite preview. Sessions and recovery preserve the queue’s import defaults;
+older sessions retain explicit photo settings and use factory defaults for new imports.
 
 ### Crop, headroom, and zoom
 
@@ -321,6 +332,13 @@ mask. There is no measured High Quality speedup from a 2 MP input cap in this ap
 **Models → Processing device** offers Automatic (default) and CPU. This local
 preference persists separately from photo settings, presets, and sessions. The
 `GIBBON_INFERENCE_DEVICE=cpu` launch override takes priority and is shown in Models.
+Automatic tries NVIDIA CUDA only when the installed runtime exposes its provider.
+Published packages bundle CPU-only inference; this engine does not enable AMD/Intel
+GPU providers or Apple GPU acceleration. CUDA initialization or inference can fail
+because of incompatible drivers/libraries, missing CUDA/cuDNN components, or insufficient
+GPU memory. These are possible causes, not a diagnosis. CPU fallback keeps processing
+available; inspect the actual error under Technical details and release models to retry.
+
 Models shows each session’s selected device, readable CPU fallback reasons, and
 expandable technical errors. **Release loaded models** frees sessions and the
 processing cache while retaining photos, edits, and the completed preview. Device

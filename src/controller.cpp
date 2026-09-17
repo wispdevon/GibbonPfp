@@ -1,4 +1,5 @@
 #include "controller.h"
+#include "zip_export.h"
 #include <QCryptographicHash>
 #include <QDateTime>
 #include <QDir>
@@ -173,7 +174,7 @@ void Controller::add(const QList<QUrl> &urls, bool recursive) {
             if (q.path == p)
                 exists = true;
         if (!exists) {
-            Item item; item.path = p; item.fingerprint = sourceFingerprint(p);
+            Item item; item.settings = importDefaults; item.path = p; item.fingerprint = sourceFingerprint(p);
             queue.push_back(item);
         }
     }
@@ -205,7 +206,7 @@ void Controller::loadSample() {
             return;
         }
     const int row = queue.size();
-    Item sample; sample.path = path; sample.fingerprint = sourceFingerprint(path);
+    Item sample; sample.settings = importDefaults; sample.path = path; sample.fingerprint = sourceFingerprint(path);
     queue.push_back(sample);
     setCurrent(row);
 }
@@ -314,27 +315,24 @@ void Controller::select(int row, bool selected) {
     queue[row].selected = selected;
     emit changed();
 }
-void Controller::applySelected() {
-    if (working || index < 0)
-        return;
-    auto s = queue[index].settings;
-    for (int i = 0; i < queue.size(); ++i)
-        if (i != index && queue[i].selected) {
-            auto &q = queue[i];
-            q.history.push_back(q.settings);
-            auto crop = q.settings.crop;
-            auto basis = q.settings.cropBasis;
-            auto zoom = q.settings.cropZoom;
-            q.settings = s;
-            q.settings.crop = crop;
-            q.settings.cropBasis = basis;
-            q.settings.cropZoom = zoom;
-            q.settings.strokes = {};
-            q.settings.approved = false;
-            q.state = "Edited";
-        }
-    status = "Settings applied to selected photos; individual crops retained";
+void Controller::applyAll() {
+    if (working || index < 0) return;
+    importDefaults = queue[index].settings;
+    importDefaults.crop = {};
+    importDefaults.cropBasis = {};
+    importDefaults.strokes = {};
+    importDefaults.approved = false;
+    for (auto &q : queue) {
+        q.history.push_back(q.settings);
+        if (q.history.size() > 50) q.history.removeFirst();
+        q.settings = importDefaults;
+        q.state = "Edited";
+        q.error.clear();
+        q.warnings.clear();
+    }
+    details.clear();
     emit changed();
+    preview();
 }
 void Controller::approve() {
     if (working || index < 0 || details.isEmpty() || queue[index].state == "Failed")
@@ -352,6 +350,7 @@ void Controller::removeSelected() {
         if (queue[i].selected)
             queue.removeAt(i);
     index = queue.empty() ? -1 : 0;
+    if (queue.empty()) importDefaults = Settings{};
     details.clear();
     emit changed();
     if (index >= 0)
@@ -470,18 +469,33 @@ void Controller::exportCurrent(const QUrl &dir) {
     if (index >= 0)
         processMany({index}, dir.toLocalFile(), true);
 }
-void Controller::processMany(QVector<int> rows, QString directory, bool exportFiles) {
+void Controller::exportZip(const QUrl &destination) {
+    if (working) return;
+    const QFileInfo target(destination.toLocalFile());
+    for (const auto &item : queue) {
+        const QFileInfo source(item.path);
+        if (target.absoluteFilePath() == source.absoluteFilePath() ||
+            (!target.canonicalFilePath().isEmpty() && target.canonicalFilePath() == source.canonicalFilePath())) {
+            fail("Choose a ZIP destination other than a source photo");
+            return;
+        }
+    }
+    QVector<int> rows;
+    for (int i = 0; i < queue.size(); ++i) rows << i;
+    processMany(rows, destination.toLocalFile(), true, true);
+}
+void Controller::processMany(QVector<int> rows, QString directory, bool exportFiles, bool zip) {
     if (working || rows.empty())
         return;
     if (exportFiles && directory.isEmpty()) {
-        fail("Choose an output folder");
+        fail(zip ? "Choose a ZIP destination" : "Choose an output folder");
         return;
     }
     const bool needsQuality = std::any_of(rows.cbegin(), rows.cend(), [this](int row) {
         return queue[row].settings.background == "quality";
     });
-    if (!allowHighQuality(needsQuality, [this, rows, directory, exportFiles] {
-            processMany(rows, directory, exportFiles);
+    if (!allowHighQuality(needsQuality, [this, rows, directory, exportFiles, zip] {
+            processMany(rows, directory, exportFiles, zip);
         }))
         return;
     working = true;
@@ -489,7 +503,7 @@ void Controller::processMany(QVector<int> rows, QString directory, bool exportFi
     auto snapshot = queue;
     beginProgress();
     const auto token = operation;
-    status = "Processing selected photos…";
+    status = zip ? "Exporting every queued photo to ZIP…" : "Processing selected photos…";
     emit changed();
     auto *w = new QFutureWatcher<QString>(this);
     connect(w, &QFutureWatcher<QString>::finished, this, [this, w] {
@@ -500,7 +514,10 @@ void Controller::processMany(QVector<int> rows, QString directory, bool exportFi
         w->deleteLater();
         emit changed();
     });
-    w->setFuture(QtConcurrent::run(&pool, [this, rows, snapshot, directory, exportFiles, token] {
+    w->setFuture(QtConcurrent::run(&pool, [this, rows, snapshot, directory, exportFiles, token, zip]() -> QString {
+      try {
+        std::unique_ptr<ZipExport> archive;
+        if (zip) archive = std::make_unique<ZipExport>(directory, &cancelled);
         int done = 0, held = 0, failed = 0;
         QJsonArray report;
         int photo = 0;
@@ -516,7 +533,8 @@ void Controller::processMany(QVector<int> rows, QString directory, bool exportFi
                     ++held;
                 else {
                     if (exportFiles)
-                        output = Engine::save(r, q.path, directory, q.settings);
+                        output = zip ? archive->addPhoto(q.path, q.settings.prefix, q.settings.format, r.encoded)
+                                     : Engine::save(r, q.path, directory, q.settings);
                     ++done;
                 }
                 report.append(QJsonObject{{"source", q.path},
@@ -531,10 +549,10 @@ void Controller::processMany(QVector<int> rows, QString directory, bool exportFi
                     r.preview.scaled(1400, 1400, Qt::KeepAspectRatio, Qt::SmoothTransformation);
                 QMetaObject::invokeMethod(
                     this,
-                    [this, r, row, output, token] {
+                    [this, r, row, output, token, zip] {
                         if (token != operation) return;
                         showResult(r, row);
-                        if (!output.isEmpty())
+                        if (!zip && !output.isEmpty())
                             queue[row].state = "Exported";
                         status = QString("Processed %1").arg(QFileInfo(queue[row].path).fileName());
                         emit changed();
@@ -558,6 +576,19 @@ void Controller::processMany(QVector<int> rows, QString directory, bool exportFi
                     Qt::QueuedConnection);
             }
         }
+        if (zip) {
+            if (cancelled || held || failed)
+                return QString("ZIP not saved · %1 need review · %2 failed%3 · destination unchanged")
+                    .arg(held).arg(failed).arg(cancelled ? " · cancelled" : "");
+            progressCallback(token, rows.size(), rows.size())({"Writing ZIP", "Finalizing archive"});
+            archive->commit(QJsonDocument(report).toJson());
+            QMetaObject::invokeMethod(this, [this, rows, token] {
+                if (token != operation) return;
+                for (int row : rows) queue[row].state = "Exported";
+                emit changed();
+            }, Qt::QueuedConnection);
+            return QString("ZIP saved · %1 photos · %2").arg(done).arg(directory);
+        }
         if (exportFiles) {
             QString reportError;
             QDir().mkpath(directory);
@@ -578,6 +609,9 @@ void Controller::processMany(QVector<int> rows, QString directory, bool exportFi
             .arg(held)
             .arg(failed)
             .arg(cancelled ? " · cancelled" : "");
+      } catch (const std::exception &e) {
+        return QString("Export failed · %1 · destination unchanged").arg(errorText(e));
+      }
     }));
 }
 static void writeJson(const QUrl &url, const QJsonObject &j) {
@@ -601,7 +635,7 @@ void Controller::saveSession(const QUrl &u) {
         for (auto &q : queue)
             a.append(QJsonObject{
                 {"source", q.path}, {"settings", q.settings.json()}, {"selected", q.selected}});
-        writeJson(u, {{"version", 1}, {"photos", a}});
+        writeJson(u, {{"version", 1}, {"photos", a}, {"importDefaults", importDefaults.json()}});
         status = "Session saved";
         emit changed();
     } catch (const std::exception &e) {
@@ -615,6 +649,10 @@ void Controller::loadSession(const QUrl &u) {
         auto j = readJson(u);
         if (j["version"].toInt() != 1 || !j["photos"].isArray())
             throw std::runtime_error("Unsupported session format");
+        if (j.contains("importDefaults") && !j["importDefaults"].isObject())
+            throw std::runtime_error("Invalid queue import defaults");
+        auto defaults = Settings::fromJson(j["importDefaults"].toObject());
+        defaults.crop = {}; defaults.cropBasis = {}; defaults.strokes = {}; defaults.approved = false;
         QVector<Item> loaded;
         for (auto v : j["photos"].toArray()) {
             auto o = v.toObject();
@@ -626,6 +664,7 @@ void Controller::loadSession(const QUrl &u) {
             loaded << q;
         }
         queue = loaded;
+        importDefaults = defaults;
         index = queue.empty() ? -1 : 0;
         details.clear();
         emit changed();
