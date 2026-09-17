@@ -5,6 +5,10 @@ on:
     tags: ['v*']
   pull_request:
   workflow_dispatch:
+# Keep tags independent; replace obsolete branch/PR runs with the newest commit.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
 permissions:
   contents: read
 jobs:
@@ -44,10 +48,21 @@ jobs:
         with:
           path: .cache/vcpkg
           key: vcpkg-${{ matrix.name }}-${{ hashFiles('vcpkg.json', 'cmake/triplets/*') }}
+          # vcpkg validates each binary's ABI before reuse. A manifest change
+          # should rebuild affected ports, not discard every compiled dependency.
+          restore-keys: |
+            vcpkg-${{ matrix.name }}-
+      - name: Cache bundled models
+        uses: actions/cache@v4
+        with:
+          path: |
+            assets/models/face_detection_yunet_2023mar.onnx
+            assets/models/modnet-photographic.onnx
+          key: models-${{ runner.os }}-${{ hashFiles('assets/models/manifest.json') }}
       - name: Set up pinned dependencies
         shell: bash
         run: |
-          git clone https://github.com/microsoft/vcpkg.git .cache/vcpkg-tool
+          git clone --filter=blob:none --no-checkout https://github.com/microsoft/vcpkg.git .cache/vcpkg-tool
           git -C .cache/vcpkg-tool checkout a1cae005c39be7b18ba319fced856b68d7276271
           if [[ "$RUNNER_OS" == "Windows" ]]; then .cache/vcpkg-tool/bootstrap-vcpkg.bat -disableMetrics; else .cache/vcpkg-tool/bootstrap-vcpkg.sh -disableMetrics; fi
           echo "VCPKG_ROOT=$GITHUB_WORKSPACE/.cache/vcpkg-tool" >> "$GITHUB_ENV"
@@ -56,11 +71,11 @@ jobs:
         shell: bash
         run: cmake --preset vcpkg -DGIBBON_BUNDLED_ORT=ON -DVCPKG_TARGET_TRIPLET=${{ matrix.triplet }} -DVCPKG_OVERLAY_TRIPLETS="$PWD/cmake/triplets"
       - name: Save compiled dependencies
-        if: always() && steps.dependency-cache.outputs.cache-hit != 'true'
+        if: ${{ !cancelled() && steps.dependency-cache.outputs.cache-primary-key != '' && steps.dependency-cache.outputs.cache-hit != 'true' }}
         uses: actions/cache/save@v4
         with:
           path: .cache/vcpkg
-          key: vcpkg-${{ matrix.name }}-${{ hashFiles('vcpkg.json', 'cmake/triplets/*') }}
+          key: ${{ steps.dependency-cache.outputs.cache-primary-key }}
       - name: Build
         run: cmake --build build-release --parallel 3
       - name: Test
@@ -135,6 +150,8 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: HeadshotFlow-${{ matrix.name }}
+          # Packages are already compressed; do not compress them a second time.
+          compression-level: 0
           path: |
             dist/*.AppImage
             dist/*.zip

@@ -128,3 +128,25 @@ CLI integration checks. System installation requires administrator authenticatio
 The per-user test installation is separate from pacman's package database; remove
 its `~/.local/bin/gibbonpfp` and `~/.local/share/applications/gibbonpfp.desktop` when
 switching exclusively to the system package, so the user launcher does not shadow it.
+
+## CI runtime and caches
+
+All four native build, test, and package jobs remain enabled. Superseded branch
+and pull-request runs are cancelled; version-tag runs are retained independently.
+
+Compiled vcpkg dependencies use an exact manifest/triplet cache key, with a fallback
+to the latest cache for the same platform. vcpkg still checks each package ABI and
+rebuilds incompatible packages. This permits reuse across version bumps and dependency
+additions instead of starting every port from scratch. A fallback hit is saved under
+the new primary key. All four overlay triplets build Release dependencies only,
+including Windows; the application and its tests also use Release in this workflow.
+
+The vcpkg checkout keeps the pinned revision and version history but fetches blobs
+on demand. Bundled face/Fast model files are cached by manifest hash and verified
+by `fetch_assets.py` on every run. High Quality is excluded. Package artifacts use
+no additional upload compression because their contents are already compressed;
+test logs retain normal compression.
+
+Cold runs still compile missing dependencies. Compare Configure, Build, Test, and
+packaging step durations on subsequent Actions runs to measure the improvement;
+local validation cannot establish a hosted-runner speedup.
