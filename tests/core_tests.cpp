@@ -18,6 +18,7 @@ class CoreTests : public QObject {
     Q_OBJECT
   private slots:
     void newDefaultsAndAtomicZip() {
+      try {
         Settings defaults;
         QCOMPARE(defaults.cropZoom, 70.);
         QCOMPARE(defaults.headroom, .08);
@@ -56,10 +57,22 @@ class CoreTests : public QObject {
             zip.commit("[]");
         }
         QProcess reader;
-        reader.start("python", {"-c", "import sys,zipfile,json; z=zipfile.ZipFile(sys.argv[1]); assert z.testzip() is None; n=z.namelist(); assert len(n)==3 and n[-1]=='export-report.json'; assert n[0]!=n[1]; assert all(z.read(p).startswith(bytes.fromhex('ffd8')) for p in n[:2]); assert json.loads(z.read(n[-1]))==[]; open(sys.argv[1]+'.jpg','wb').write(z.read(n[0]))", path});
+        reader.start("python", {"-c", "import sys,zipfile,json; z=zipfile.ZipFile(sys.argv[1]); assert z.testzip() is None; n=z.namelist(); assert len(n)==3 and n[-1]=='export-report.json'; assert n[:2]==['\u8096\u50cf-pfp.jpg','\u8096\u50cf-pfp-1.jpg']; assert all(z.getinfo(p).flag_bits & 0x800 for p in n[:2]); assert all(z.read(p).startswith(bytes.fromhex('ffd8')) for p in n[:2]); assert json.loads(z.read(n[-1]))==[]; open(sys.argv[1]+'.jpg','wb').write(z.read(n[0]))", path});
         QVERIFY(reader.waitForFinished());
         QVERIFY2(reader.exitCode() == 0, reader.readAllStandardError().constData());
         QCOMPARE(QImage(path + ".jpg"), QImage::fromData(bytes));
+    } catch (const std::exception &e) {
+        QFAIL(e.what());
+      }
+    }
+    void zipFilenameLimitPreservesUnicode() {
+        QTemporaryDir dir;
+        QVERIFY(dir.isValid());
+        ZipExport zip(dir.filePath("portraits.zip"));
+        const QString prefix(119, QLatin1Char('x'));
+        const auto name = zip.addPhoto(QStringLiteral("\U0001F4F7.jpg"), prefix, "jpeg", "bytes");
+        QCOMPARE(name, prefix + ".jpg");
+        zip.commit("[]");
     }
     void cacheOwnershipAndEviction() {
         cv::Mat value(10, 10, CV_32F, cv::Scalar(.4));

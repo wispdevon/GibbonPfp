@@ -19,7 +19,6 @@ jobs:
         include:
           - {os: ubuntu-24.04, name: linux-x64, triplet: x64-linux-dynamic}
           - {os: windows-2022, name: windows-x64, triplet: x64-windows}
-          - {os: macos-15-intel, name: macos-x64, triplet: x64-osx-dynamic}
           - {os: macos-15, name: macos-arm64, triplet: arm64-osx-dynamic}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 90
@@ -43,11 +42,20 @@ jobs:
       - name: Linux build dependencies
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y ninja-build libgl1-mesa-dev libxkbcommon-dev libxkbcommon-x11-0 libxcb-cursor0 libxcb-icccm4 libxcb-keysyms1 libxcb-shape0 libxcb-xinerama0 libxcb-randr0 libxcb-render-util0 libxcb-image0 libxcb-xfixes0 libxcb-sync1 libxcb-xkb1 libx11-xcb1 libfuse2
+      - name: Identify runner image for dependency cache
+        id: runner-image
+        shell: python
+        run: |
+          import hashlib, os
+          image = os.environ.get('ImageOS', os.environ['RUNNER_OS']) + '/' + os.environ.get('ImageVersion', 'unknown')
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
+              output.write('identity=' + hashlib.sha256(image.encode()).hexdigest()[:16] + '\n')
+          print('Dependency cache runner image:', image)
       - uses: actions/cache/restore@v4
         id: dependency-cache
         with:
           path: .cache/vcpkg
-          key: vcpkg-${{ matrix.name }}-${{ hashFiles('vcpkg.json', 'cmake/triplets/*') }}
+          key: vcpkg-${{ matrix.name }}-${{ hashFiles('vcpkg.json', 'cmake/triplets/*') }}-${{ steps.runner-image.outputs.identity }}
           # vcpkg validates each binary's ABI before reuse. A manifest change
           # should rebuild affected ports, not discard every compiled dependency.
           restore-keys: |
@@ -92,6 +100,7 @@ jobs:
           name: test-results-${{ matrix.name }}
           path: |
             build-release/test-results.xml
+            build-release/*-results.txt
             build-release/Testing/Temporary/*.log
           if-no-files-found: ignore
       - name: Sign Windows executable when configured
@@ -131,10 +140,10 @@ jobs:
         run: |
           bash scripts/sign_macos.sh dist/portable/gibbonpfp.app
           python scripts/test_packaged.py dist/portable gibbonpfp.app/Contents/MacOS/gibbonpfp
-          hdiutil create -volname HeadshotFlow -srcfolder dist/portable -ov -format UDZO dist/HeadshotFlow-1.0.1-${{ matrix.name }}.dmg
+          hdiutil create -volname HeadshotFlow -srcfolder dist/portable -ov -format UDZO dist/HeadshotFlow-1.0.2-${{ matrix.name }}.dmg
           if [[ -n "$APPLE_CERTIFICATE_BASE64" ]]; then
-            xcrun notarytool submit dist/HeadshotFlow-1.0.1-${{ matrix.name }}.dmg --apple-id "$APPLE_ID" --password "$APPLE_APP_PASSWORD" --team-id "$APPLE_TEAM_ID" --wait
-            xcrun stapler staple dist/HeadshotFlow-1.0.1-${{ matrix.name }}.dmg
+            xcrun notarytool submit dist/HeadshotFlow-1.0.2-${{ matrix.name }}.dmg --apple-id "$APPLE_ID" --password "$APPLE_APP_PASSWORD" --team-id "$APPLE_TEAM_ID" --wait
+            xcrun stapler staple dist/HeadshotFlow-1.0.2-${{ matrix.name }}.dmg
           fi
       - name: Linux AppImage
         if: runner.os == 'Linux'

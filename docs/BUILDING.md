@@ -6,7 +6,6 @@
 | --- | --- | --- |
 | Windows 11 x64 | MSVC, Windows 2022 CI runner | NSIS installer and portable ZIP |
 | Ubuntu 24.04+ x64 | Ubuntu 24.04 CI runner | AppImage |
-| macOS 14+ Intel | macOS Intel CI runner | DMG |
 | macOS 14+ Apple Silicon | macOS ARM CI runner | DMG |
 
 Compatibility is bounded by the packaged dependencies, not just the C++ source.
@@ -32,7 +31,7 @@ ctest --test-dir build-release --output-on-failure
 python3 scripts/test_cli.py build-release/gibbonpfp
 ```
 
-Use `x64-windows`, `x64-osx-dynamic`, or `arm64-osx-dynamic` as appropriate.
+Use `x64-windows` or `arm64-osx-dynamic` as appropriate.
 The official CPU ONNX Runtime 1.23.2 archives are SHA-256 pinned; this avoids
 requiring GPU drivers or compiling the entire runtime during every desktop build.
 `GIBBON_BUNDLED_ORT=OFF` uses the system runtime for development.
@@ -87,7 +86,7 @@ Never describe an unsigned/ad-hoc package as notarized or publisher-verified.
 ## Release procedure
 
 1. Run local core/controller tests, CLI integration, native UI inspection, and model checks.
-2. Push a Conventional Commit to `main` and wait for all four build jobs.
+2. Push a Conventional Commit to `main` and wait for all three build jobs.
 3. Inspect packaged startup and codec checks. Fix failures before marking that
    platform validated.
 4. Create a version tag and GitHub release, attaching only successful packages.
@@ -131,14 +130,14 @@ switching exclusively to the system package, so the user launcher does not shado
 
 ## CI runtime and caches
 
-All four native build, test, and package jobs remain enabled. Superseded branch
+All three native build, test, and package jobs remain enabled. Superseded branch
 and pull-request runs are cancelled; version-tag runs are retained independently.
 
-Compiled vcpkg dependencies use an exact manifest/triplet cache key, with a fallback
+Compiled vcpkg dependencies use an exact manifest/triplet/runner-image cache key, with a fallback
 to the latest cache for the same platform. vcpkg still checks each package ABI and
 rebuilds incompatible packages. This permits reuse across version bumps and dependency
 additions instead of starting every port from scratch. A fallback hit is saved under
-the new primary key. All four overlay triplets build Release dependencies only,
+the new primary key. All three overlay triplets build Release dependencies only,
 including Windows; the application and its tests also use Release in this workflow.
 
 The vcpkg checkout keeps the pinned revision and version history but fetches blobs
@@ -150,3 +149,16 @@ test logs retain normal compression.
 Cold runs still compile missing dependencies. Compare Configure, Build, Test, and
 packaging step durations on subsequent Actions runs to measure the improvement;
 local validation cannot establish a hosted-runner speedup.
+
+Intel macOS is no longer a supported release target; CI builds Windows x64, Linux
+x64, and macOS Apple Silicon. Historical Intel release assets are unchanged.
+Removing a parallel job saves runner minutes; overall latency still depends on
+the slowest remaining platform.
+
+Runner-image identity refreshes immutable dependency caches when hosted toolchains
+change, while platform fallback keys preserve compatible binaries. CTest artifacts
+also include direct QtTest text logs so early Windows failures retain diagnostics.
+Recovery tests wait for the latest saved content rather than assuming processing
+finishes before the autosave debounce. ZIP names use explicit UTF-8 headers and
+Windows wide-character paths to avoid ANSI code-page conversion failures. The
+ZIP filename length limit keeps supplementary Unicode characters intact.

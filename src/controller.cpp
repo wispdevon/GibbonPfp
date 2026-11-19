@@ -471,18 +471,11 @@ void Controller::exportCurrent(const QUrl &dir) {
 }
 void Controller::exportZip(const QUrl &destination) {
     if (working) return;
-    const QFileInfo target(destination.toLocalFile());
-    for (const auto &item : queue) {
-        const QFileInfo source(item.path);
-        if (target.absoluteFilePath() == source.absoluteFilePath() ||
-            (!target.canonicalFilePath().isEmpty() && target.canonicalFilePath() == source.canonicalFilePath())) {
-            fail("Choose a ZIP destination other than a source photo");
-            return;
-        }
-    }
+    const auto path = destination.toLocalFile();
+    if (!checkSaveDestination(path)) return;
     QVector<int> rows;
     for (int i = 0; i < queue.size(); ++i) rows << i;
-    processMany(rows, destination.toLocalFile(), true, true);
+    processMany(rows, path, true, true);
 }
 void Controller::processMany(QVector<int> rows, QString directory, bool exportFiles, bool zip) {
     if (working || rows.empty())
@@ -614,9 +607,21 @@ void Controller::processMany(QVector<int> rows, QString directory, bool exportFi
       }
     }));
 }
-static void writeJson(const QUrl &url, const QJsonObject &j) {
-    QSaveFile f(url.toLocalFile());
-    if (!f.open(QIODevice::WriteOnly) || f.write(QJsonDocument(j).toJson()) < 0 || !f.commit())
+bool Controller::checkSaveDestination(const QString &destination) {
+    const bool conflicts = std::any_of(queue.cbegin(), queue.cend(), [&](const Item &item) {
+        return sameExistingFile(destination, item.path) ||
+               sameExistingFile(destination, item.settings.reference);
+    });
+    if (conflicts || sameExistingFile(destination, importDefaults.reference)) {
+        fail("Choose a destination other than a source photo or reference image");
+        return false;
+    }
+    return true;
+}
+static void writeJson(const QString &path, const QJsonObject &j) {
+    QSaveFile f(path);
+    const auto bytes = QJsonDocument(j).toJson();
+    if (!f.open(QIODevice::WriteOnly) || f.write(bytes) != bytes.size() || !f.commit())
         throw std::runtime_error("Cannot save file");
 }
 static QJsonObject readJson(const QUrl &url) {
@@ -630,12 +635,15 @@ static QJsonObject readJson(const QUrl &url) {
     return d.object();
 }
 void Controller::saveSession(const QUrl &u) {
+    const auto path = u.toLocalFile();
+    if (!checkSaveDestination(path))
+        return;
     try {
         QJsonArray a;
         for (auto &q : queue)
             a.append(QJsonObject{
                 {"source", q.path}, {"settings", q.settings.json()}, {"selected", q.selected}});
-        writeJson(u, {{"version", 1}, {"photos", a}, {"importDefaults", importDefaults.json()}});
+        writeJson(path, {{"version", 1}, {"photos", a}, {"importDefaults", importDefaults.json()}});
         status = "Session saved";
         emit changed();
     } catch (const std::exception &e) {
@@ -656,6 +664,9 @@ void Controller::loadSession(const QUrl &u) {
         QVector<Item> loaded;
         for (auto v : j["photos"].toArray()) {
             auto o = v.toObject();
+            if (!v.isObject() || o["source"].toString().isEmpty() || !o["settings"].isObject() ||
+                (o.contains("selected") && !o["selected"].isBool()))
+                throw std::runtime_error("Invalid photo in session");
             Item q;
             q.path = o["source"].toString();
             q.fingerprint = sourceFingerprint(q.path);
@@ -674,7 +685,8 @@ void Controller::loadSession(const QUrl &u) {
     }
 }
 void Controller::savePreset(const QUrl &u) {
-    if (index < 0)
+    const auto path = u.toLocalFile();
+    if (index < 0 || !checkSaveDestination(path))
         return;
     try {
         auto s = queue[index].settings;
@@ -683,7 +695,7 @@ void Controller::savePreset(const QUrl &u) {
         s.strokes = {};
         s.approved = false;
         s.reference.clear();
-        writeJson(u, s.json());
+        writeJson(path, s.json());
         status = "Preset saved";
         emit changed();
     } catch (const std::exception &e) {

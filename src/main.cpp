@@ -31,6 +31,9 @@ static QJsonObject readSettings(const QString &path) {
     return j.object();
 }
 static void writeReport(const QString &path, const QJsonArray &report) {
+    for (const auto &entry : report)
+        if (sameExistingFile(path, entry.toObject()["output"].toString()))
+            throw std::runtime_error("Report destination matches an exported photo. Choose a different --report path.");
     QSaveFile f(path);
     if (!f.open(QIODevice::WriteOnly))
         throw std::runtime_error("Cannot open report destination");
@@ -201,6 +204,15 @@ int main(int argc, char **argv) {
             auto files = expandInputs(args, p.isSet("recursive"));
             if (files.empty())
                 throw std::runtime_error("No supported images found");
+            const auto reportPath = p.value("report");
+            if (p.isSet("report")) {
+                for (const auto &file : std::as_const(files))
+                    if (sameExistingFile(reportPath, file))
+                        throw std::runtime_error("Report destination matches an input photo. Choose a different --report path.");
+                if (sameExistingFile(reportPath, s.reference) ||
+                    sameExistingFile(reportPath, p.value("preset")))
+                    throw std::runtime_error("Report destination matches a reference photo or preset. Choose a different --report path.");
+            }
             Engine engine;
             QJsonArray report;
             int held = 0, failed = 0;
@@ -233,7 +245,7 @@ int main(int argc, char **argv) {
                     << QJsonDocument(entry).toJson(QJsonDocument::Compact) << Qt::endl;
             }
             if (p.isSet("report"))
-                writeReport(p.value("report"), report);
+                writeReport(reportPath, report);
             return interrupted ? 130 : (held || failed ? 2 : 0);
         }
         loadWorkspaceFonts();

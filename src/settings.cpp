@@ -4,6 +4,7 @@
 #include <QJsonArray>
 #include <QSet>
 #include <cmath>
+#include <filesystem>
 #include <stdexcept>
 
 namespace gibbon {
@@ -175,6 +176,13 @@ QStringList expandInputs(const QStringList &paths, bool recursive) {
             add(p);
     }
     return out;
+}
+bool sameExistingFile(const QString &first, const QString &second) {
+    if (first.isEmpty() || second.isEmpty())
+        return false;
+    std::error_code error;
+    return std::filesystem::equivalent(QFileInfo(first).filesystemFilePath(),
+                                       QFileInfo(second).filesystemFilePath(), error);
 }
 QString errorText(const std::exception &e) {
     return QString::fromUtf8(e.what());

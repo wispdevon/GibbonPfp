@@ -42,6 +42,21 @@ def main():
         assert diagnostic['stages'][-1]['stage'] == 'Encoding'
         assert diagnostic['cacheHits'] == 0
         assert 'device' in diagnostic
+        original = photo.read_bytes()
+        protected = root / 'protected'
+        run('process', photo, '--output', protected, '--no-auto-crop', '--report', photo, code=1)
+        assert photo.read_bytes() == original
+        assert not protected.exists()
+        alias = root / 'input-alias.csv'
+        alias.hardlink_to(photo)
+        run('process', photo, '--output', protected, '--no-auto-crop', '--report', alias, code=1)
+        assert photo.read_bytes() == alias.read_bytes() == original
+        assert not protected.exists()
+        collision = root / 'report-collision'
+        report_image = collision / f'{photo.stem}-pfp.png'
+        run('process', photo, '--output', collision, '--no-auto-crop', '--format', 'png',
+            '--report', report_image, code=1)
+        assert report_image.read_bytes().startswith(b'\x89PNG')
         run('--version')
         run('-v')
         run('-h')

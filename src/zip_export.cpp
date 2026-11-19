@@ -27,6 +27,8 @@ ZipExport::ZipExport(const QString &path, std::atomic_bool *cancel) : file(path)
         throw std::runtime_error("Cannot allocate ZIP writer");
     try {
         check(archive_write_set_format_zip(writer));
+        // ZIP names must not depend on the Windows ANSI code page.
+        check(archive_write_set_format_option(writer, "zip", "hdrcharset", "UTF-8"));
         check(archive_write_set_format_option(writer, "zip", "compression", "store"));
         check(archive_write_set_bytes_per_block(writer, 0));
         check(archive_write_open(
@@ -56,8 +58,13 @@ void ZipExport::add(const QString &name, const QByteArray &bytes) {
                                                                         archive_entry_free);
     if (!entry)
         throw std::runtime_error("Cannot allocate ZIP entry");
+#ifdef Q_OS_WIN
+    const auto wide = name.toStdWString();
+    archive_entry_copy_pathname_w(entry.get(), wide.c_str());
+#else
     const auto utf8 = name.toUtf8();
     archive_entry_set_pathname_utf8(entry.get(), utf8.constData());
+#endif
     archive_entry_set_size(entry.get(), bytes.size());
     archive_entry_set_filetype(entry.get(), AE_IFREG);
     archive_entry_set_perm(entry.get(), 0644);
@@ -81,7 +88,12 @@ QString ZipExport::addPhoto(const QString &source, const QString &prefix, const 
     stem.replace(QRegularExpression("[<>:\"/\\\\|?*\\x00-\\x1f]"), "_");
     while (stem.startsWith('.'))
         stem.remove(0, 1);
-    stem = stem.left(120);
+    constexpr qsizetype maxStemLength = 120;
+    if (stem.size() > maxStemLength) {
+        // QString counts UTF-16 code units. Keep supplementary characters whole.
+        const bool splitsSurrogatePair = stem.at(maxStemLength - 1).isHighSurrogate();
+        stem.truncate(splitsSurrogatePair ? maxStemLength - 1 : maxStemLength);
+    }
     if (stem.isEmpty())
         stem = "photo";
     const QString extension = format == "jpeg" ? ".jpg" : ".png";

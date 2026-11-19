@@ -81,7 +81,7 @@ libarchive · libtiff · libwebp · CMake/Ninja. GUI and CLI share the same `gib
 
 Check [Releases](https://github.com/wispdevon/GibbonPfp/releases) for published
 packages. If a package is unavailable for your system, build from source below.
-Release targets are Windows 11 x64, Ubuntu 24.04+ x64, and macOS 14+ on Intel and
+Release targets are Windows 11 x64, Ubuntu 24.04+ x64, and macOS 14+ on
 Apple Silicon. Portable packages are configured to include runtime dependencies,
 face detection, and the Fast model. High Quality is a separate download.
 
@@ -407,6 +407,9 @@ status, and warnings/errors. JSON results also include `diagnostics`: total wall
 time in milliseconds, ordered exclusive stage timings, selected model devices,
 and cache hits/misses. Warm cache reuse has its own stage instead of inference.
 Filename collisions receive numeric suffixes.
+Use a separate path for `--report`. A report cannot replace an input or
+reference photo, the active preset, or a photo exported by the same run. If
+the conflict is with a newly exported photo, the photo remains on disk.
 
 Desktop processing shows the current stage and operation elapsed time; batches
 include the current photo number. Cancellation stays pending until an active
@@ -439,6 +442,8 @@ Sessions store source paths, per-photo settings, crop baselines and zoom,
 selection, approvals, and strokes; **they do not embed photos**. Preserve the
 original files. Presets omit photo-specific crop geometry, strokes, approvals,
 and reference paths. Settings changes invalidate approval for the affected image.
+Saving a session, preset, or ZIP cannot replace a queued source or reference
+photo. Opening a malformed session leaves the current workspace intact.
 
 ### Autosave and recovery
 

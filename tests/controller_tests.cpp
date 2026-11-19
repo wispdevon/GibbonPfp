@@ -86,6 +86,39 @@ class ControllerTests : public QObject {
         c.exportZip(zip); c.cancel(); QTRY_VERIFY_WITH_TIMEOUT(!c.busy(), 15000);
         QVERIFY(file.open(QIODevice::ReadOnly)); QCOMPARE(file.readAll(), complete);
     }
+    void workspaceSavesProtectSourcePhotos() {
+        QTemporaryDir dir;
+        const auto path = dir.filePath("portrait.png");
+        QImage photo(120, 160, QImage::Format_RGB32);
+        photo.fill(Qt::gray);
+        QVERIFY(photo.save(path));
+        ImageStore images;
+        Controller c(&images);
+        const auto url = QUrl::fromLocalFile(path);
+        c.add({url});
+        QTRY_VERIFY_WITH_TIMEOUT(!c.busy(), 15000);
+        c.saveSession(url);
+        QCOMPARE(QImage(path), photo);
+        QVERIFY(c.message().contains("other than a source photo"));
+        c.savePreset(url);
+        QCOMPARE(QImage(path), photo);
+        QVERIFY(c.message().contains("other than a source photo"));
+    }
+    void malformedSessionPreservesWorkspace() {
+        QTemporaryDir dir;
+        QFile session(dir.filePath("malformed.json"));
+        QVERIFY(session.open(QIODevice::WriteOnly));
+        session.write(R"({"version":1,"photos":[null]})");
+        session.close();
+        ImageStore images;
+        Controller c(&images);
+        c.loadSample();
+        QTRY_VERIFY_WITH_TIMEOUT(!c.busy(), 15000);
+        const auto workspace = c.recoveryJson();
+        c.loadSession(QUrl::fromLocalFile(session.fileName()));
+        QCOMPARE(c.recoveryJson(), workspace);
+        QVERIFY(c.message().contains("Invalid photo in session"));
+    }
     void highQualityConsentAndCache() {
         QTemporaryDir dir;
         const auto priorModelDir = qgetenv("GIBBON_MODEL_DIR");
@@ -203,6 +236,7 @@ class ControllerTests : public QObject {
             QVERIFY(!c.recoveryPending());
             c.loadSample();
             QTRY_VERIFY_WITH_TIMEOUT(!c.busy(), 15000);
+            c.autosaveRecovery(); // Exercise an existing snapshot even on fast machines.
             c.set("brightness", .23);
             c.stroke(QVariantList{QVariantMap{{"x", .5}, {"y", .5}}}, true, .05);
             QTRY_VERIFY_WITH_TIMEOUT(!c.busy(), 15000);
@@ -210,10 +244,17 @@ class ControllerTests : public QObject {
             c.select(0, false);
             QVERIFY(c.queue[0].settings.approved);
             QVERIFY(!c.queue[0].selected);
-            c.queue[0].settings.background = "quality";
+            c.set("background", "quality");
             saved = c.recoveryJson();
-            QVERIFY(!QFile::exists(recovery.filePath("current.json")));
-            QTRY_VERIFY_WITH_TIMEOUT(QFile::exists(recovery.filePath("current.json")), 2500);
+            // Earlier processing may already have triggered autosave on a slow runner.
+            // The latest edit must debounce, then the file must contain that edit.
+            auto persisted = [&] {
+                QFile file(recovery.filePath("current.json"));
+                if (!file.open(QIODevice::ReadOnly)) return QJsonObject{};
+                return QJsonDocument::fromJson(file.readAll()).object();
+            };
+            QVERIFY(persisted() != saved);
+            QTRY_COMPARE_WITH_TIMEOUT(persisted(), saved, 5000);
         }
         Controller c(&images, nullptr, recovery.path());
         QVERIFY(c.recoveryPending());
@@ -306,8 +347,14 @@ class ControllerTests : public QObject {
         ImageStore images;
         Controller c(&images, nullptr, directory);
         c.loadSample(); QTRY_VERIFY_WITH_TIMEOUT(!c.busy(), 15000);
+        c.autosaveRecovery(); // Crash must wait for the edit, not this earlier snapshot.
         c.set("brightness", .55);
-        QTRY_VERIFY_WITH_TIMEOUT(QFile::exists(directory + "/current.json"), 2500);
+        const auto expected = c.recoveryJson();
+        auto latestSaved = [&] {
+            QFile file(directory + "/current.json");
+            return file.open(QIODevice::ReadOnly) && QJsonDocument::fromJson(file.readAll()).object() == expected;
+        };
+        QTRY_VERIFY_WITH_TIMEOUT(latestSaved(), 5000);
 #ifdef Q_OS_UNIX
         std::raise(SIGKILL);
 #else
@@ -322,7 +369,7 @@ class ControllerTests : public QObject {
         child.setProcessEnvironment(env);
         child.start(QCoreApplication::applicationFilePath(), {"recoveryCrashWriter"});
         QVERIFY(child.waitForStarted());
-        QVERIFY(child.waitForFinished(20000));
+        QVERIFY(child.waitForFinished(30000));
 #ifdef Q_OS_UNIX
         QCOMPARE(child.exitStatus(), QProcess::CrashExit);
 #endif

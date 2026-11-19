@@ -27,5 +27,6 @@ struct Settings {
 };
 QStringList expandInputs(const QStringList &paths, bool recursive = false);
 bool supportedPath(const QString &path);
+bool sameExistingFile(const QString &first, const QString &second);
 QString errorText(const std::exception &e);
 } // namespace gibbon

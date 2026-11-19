@@ -182,6 +182,7 @@ class Controller : public QObject {
     bool allowHighQuality(bool needed, std::function<void()> resume);
     void remember();
     void fail(const QString &error);
+    bool checkSaveDestination(const QString &destination);
     void showResult(const gibbon::Result &r, int row);
     void processMany(QVector<int> rows, QString directory, bool exportFiles, bool zip = false);
 };
