@@ -32,7 +32,7 @@ python3 scripts/test_cli.py build-release/gibbonpfp
 ```
 
 Use `x64-windows` or `arm64-osx-dynamic` as appropriate.
-The official CPU ONNX Runtime 1.23.2 archives are SHA-256 pinned; this avoids
+The official Microsoft NuGet package for CPU ONNX Runtime 1.23.2 is SHA-256 pinned. This avoids
 requiring GPU drivers or compiling the entire runtime during every desktop build.
 `GIBBON_BUNDLED_ORT=OFF` uses the system runtime for development.
 

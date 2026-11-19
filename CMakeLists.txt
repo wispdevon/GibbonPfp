@@ -109,8 +109,8 @@ if(APPLE)
       DESTINATION gibbonpfp.app/Contents/Frameworks FILES_MATCHING PATTERN "*.dylib")
   endif()
   if(GIBBON_BUNDLED_ORT)
-    install(DIRECTORY "${ort_SOURCE_DIR}/lib/"
-      DESTINATION gibbonpfp.app/Contents/Frameworks FILES_MATCHING PATTERN "*.dylib")
+    install(FILES "$<TARGET_FILE:onnxruntime::onnxruntime>"
+      DESTINATION gibbonpfp.app/Contents/Frameworks)
   endif()
 endif()
 if(UNIX AND NOT APPLE)
