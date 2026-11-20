@@ -19,16 +19,13 @@ ApplicationWindow {
     readonly property color reviewInk: backend.dark ? "#e5bb75" : "#886015"
     readonly property color accent: backend.buttonAccent === "blue" ? (backend.dark ? "#91B8D8" : "#315F86") : (backend.dark ? "#bfc9d1" : "#1d1f23")
     Component.onCompleted: if (backend.recoveryPending) recoveryDialog.open()
-    readonly property bool inspectingMask: maskHold.pressed && maskHold.activeFocus && win.active && maskHold.photo === backend.current
-    onActiveChanged: if (!active) maskHold.photo = -1
-    Connections { target: backend; function onChanged() { if (maskHold.photo !== backend.current || backend.busy) maskHold.photo = -1 } }
     property bool queueOpen: workspace.width >= 1100
     property bool adjustmentsOpen: workspace.width >= 900
+    readonly property bool compactHeader: workspace.width < 670
     readonly property bool compact: workspace.height < 650
     readonly property string outputUrl: hasPhoto && backend.result.width !== undefined ? "image://photos/output?" + backend.revision : ""
     property int brushMode: 0
     property string fileAction: ""
-    property string folderAction: "import"
     property string filter: "All photos"
     readonly property bool hasPhoto: backend.current >= 0
     readonly property bool hasSelection: backend.selectedCount > 0
@@ -37,7 +34,7 @@ ApplicationWindow {
     readonly property int visiblePhotoPosition: visibleQueuePhotos.findIndex(photo => photo.row === backend.current)
     readonly property int hiddenSelectedCount: queuePhotos.filter(photo => photo.selected && !matchesQueueFilter(photo.state)).length
     readonly property bool canNavigate: hasPhoto && !backend.busy && !backend.qualityConfirmationPending
-                                        && !applyAllDialog.visible && !sizeDialog.visible
+                                        && !applyAllDialog.visible && !exportDialog.visible
     readonly property int previousPhotoRow: adjacentVisiblePhoto(-1)
     readonly property int nextPhotoRow: adjacentVisiblePhoto(1)
     readonly property int nextReviewPhotoRow: findNextReviewPhoto()
@@ -59,15 +56,12 @@ ApplicationWindow {
         }
         return -1
     }
-    function openImportFolder() {
-        folderAction = "import"
-        folders.open()
-    }
     palette.window: panel
     palette.windowText: ink
     palette.text: ink
     palette.buttonText: ink
     palette.base: panel
+    palette.mid: line
     palette.button: strong
     palette.highlight: accent
     palette.highlightedText: backend.dark ? "#17181b" : "#ffffff"
@@ -88,68 +82,123 @@ ApplicationWindow {
         id: action
         font.family: "Inter"; font.weight: Font.DemiBold
         property bool primary: false
+        property bool quiet: false
         implicitHeight: 40
         leftPadding: 14; rightPadding: 14
         font.pixelSize: 13
         Accessible.name: text
         contentItem: Text { text: action.text; font: action.font; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; color: action.primary ? (backend.dark ? "#17181b" : "white") : ink; opacity: action.enabled ? 1 : 0.45 }
-        background: Rectangle { radius: 8; color: action.primary ? (action.down ? Qt.darker(accent, 1.2) : action.hovered ? Qt.lighter(accent, 1.15) : accent) : action.down ? strong : action.hovered ? strong : panel; border.color: action.activeFocus || action.hovered ? accent : muted; border.width: action.activeFocus ? 2 : 1; opacity: action.enabled ? 1 : .6 }
+        background: Rectangle { radius: 8; color: action.primary ? (action.down ? Qt.darker(accent, 1.2) : action.hovered ? Qt.lighter(accent, 1.15) : accent) : action.down || action.hovered || action.checked ? strong : action.quiet ? "transparent" : panel; border.color: action.activeFocus || action.hovered ? accent : action.quiet ? "transparent" : muted; border.width: action.activeFocus ? 2 : 1; opacity: action.enabled ? 1 : .6 }
+    }
+    component Command: Action {
+        id: command
+        required property string symbol
+        property bool iconOnly: false
+        property string hint: text
+        leftPadding: 10; rightPadding: 10
+        implicitWidth: Math.max(40, graphic.implicitWidth + leftPadding + rightPadding)
+        ToolTip.visible: hovered || iconOnly && visualFocus
+        ToolTip.text: hint
+        contentItem: RowLayout {
+            id: graphic
+            spacing: 7
+            CommandIcon {
+                Layout.alignment: Qt.AlignVCenter
+                symbol: command.symbol
+                tone: command.primary ? (backend.dark ? "#17181b" : "white") : ink
+                opacity: command.enabled ? 1 : 0.45
+            }
+            Text {
+                visible: !command.iconOnly
+                color: command.primary ? (backend.dark ? "#17181b" : "white") : ink
+                opacity: command.enabled ? 1 : 0.45
+                text: command.text; font: command.font
+            }
+        }
+    }
+    component CommandIcon: Canvas {
+        required property string symbol
+        required property color tone
+        implicitWidth: 18; implicitHeight: 18
+        onToneChanged: requestPaint()
+        onSymbolChanged: requestPaint()
+        onPaint: {
+            const c = getContext("2d")
+            c.clearRect(0, 0, width, height)
+            c.strokeStyle = tone
+            c.fillStyle = tone
+            c.lineWidth = 1.4
+            c.lineJoin = "round"
+            c.lineCap = "round"
+            const path = points => {
+                c.beginPath()
+                c.moveTo(points[0][0], points[0][1])
+                for (let i = 1; i < points.length; ++i)
+                    c.lineTo(points[i][0], points[i][1])
+                c.stroke()
+            }
+            switch (symbol) {
+            case "photo":
+                c.strokeRect(2, 3, 14, 12)
+                path([[3,13],[7,9],[10,12],[12,10],[15,13]])
+                c.beginPath(); c.arc(12,6.5,1,0,Math.PI*2); c.fill()
+                break
+            case "folder":
+                path([[2,14],[2,4],[7,4],[9,6],[16,6],[16,14],[2,14]])
+                break
+            case "sample":
+                c.beginPath(); c.arc(9,6,3,0,Math.PI*2); c.stroke()
+                c.beginPath(); c.arc(9,16,6,Math.PI,0); c.stroke()
+                break
+            case "queue":
+                c.strokeRect(2,3,14,12)
+                path([[7,3],[7,15]])
+                path([[9,7],[13,7]])
+                path([[9,11],[13,11]])
+                break
+            case "inspector":
+                path([[3,5],[15,5]]); path([[3,9],[15,9]]); path([[3,13],[15,13]])
+                path([[7,3],[7,7]]); path([[11,7],[11,11]]); path([[6,11],[6,15]])
+                break
+            case "more":
+                for (const x of [4,9,14]) {
+                    c.beginPath(); c.arc(x,9,1,0,Math.PI*2); c.fill()
+                }
+                break
+            case "previous": path([[11,4],[6,9],[11,14]]); break
+            case "next": path([[7,4],[12,9],[7,14]]); break
+            case "clear":
+                path([[5,5],[13,13]]); path([[13,5],[5,13]])
+                break
+            case "approve": path([[3,9],[7,13],[15,5]]); break
+            case "review":
+                path([[2,4],[12,4],[16,9],[12,14],[2,14],[2,4]])
+                path([[9,6],[9,9]])
+                c.beginPath(); c.arc(9,11.5,.75,0,Math.PI*2); c.fill()
+                break
+            case "rotateLeft":
+            case "rotateRight":
+                c.save()
+                if (symbol === "rotateLeft") { c.translate(18,0); c.scale(-1,1) }
+                c.beginPath(); c.arc(9,9,5.25,.48*Math.PI,1.82*Math.PI); c.stroke()
+                path([[13,2.5],[13,6.5],[9,6.5]])
+                c.restore()
+                break
+            case "export":
+                path([[3,11],[3,15],[15,15],[15,11]])
+                path([[9,3],[9,11]]); path([[6,8],[9,11],[12,8]])
+                break
+            case "exportAs":
+                path([[4,2],[10,2],[14,6],[14,16],[4,16],[4,2]])
+                path([[10,2],[10,6],[14,6]])
+                path([[7,9],[11,9]]); path([[7,12],[11,12]])
+                break
+            }
+        }
     }
     component Caption: WorkLabel { color: ink; font.family: "Space Grotesk"; font.pixelSize: 16; font.weight: Font.Bold }
     component FieldLabel: WorkLabel { Layout.fillWidth: true; color: ink; font.pixelSize: 12; wrapMode: Text.WordWrap }
-    component Rule: Rectangle { Layout.fillWidth: true; height: 2; color: line }
-    component Entry: TextField { font.family: "Inter"; font.weight: Font.Medium; implicitHeight: 38; color: ink; placeholderTextColor: muted; selectByMouse: true; font.pixelSize: 12; background: Rectangle { color: panel; radius: 8; border.color: parent.activeFocus ? accent : line } }
-    component Choice: ComboBox {
-        id: choice
-        implicitHeight: 38
-        padding: 12
-        topPadding: 0
-        bottomPadding: 0
-        spacing: 4
-        font.family: "Inter"
-        font.weight: Font.Medium
-        font.pixelSize: 12
-        palette.button: panel
-        palette.text: ink
-        palette.buttonText: ink
-
-        contentItem: Text {
-            text: choice.displayText
-            font: choice.font
-            color: ink
-            opacity: choice.enabled ? 1 : 0.45
-            elide: Text.ElideRight
-            horizontalAlignment: choice.mirrored ? Text.AlignRight : Text.AlignLeft
-            verticalAlignment: Text.AlignVCenter
-        }
-        delegate: ItemDelegate {
-            id: option
-            objectName: "choiceDelegate"
-            required property int index
-            required property var modelData
-            width: ListView.view.width
-            implicitHeight: 32
-            leftPadding: choice.padding
-            rightPadding: choice.padding
-            text: modelData
-            font: choice.font
-            highlighted: choice.highlightedIndex === index
-            contentItem: Text {
-                text: option.text
-                font: option.font
-                color: option.highlighted ? win.palette.highlightedText : ink
-                elide: Text.ElideRight
-                horizontalAlignment: choice.mirrored ? Text.AlignRight : Text.AlignLeft
-                verticalAlignment: Text.AlignVCenter
-            }
-        }
-        background: Rectangle {
-            radius: 8
-            color: panel
-            border.color: choice.activeFocus ? accent : line
-            border.width: choice.activeFocus ? 2 : 1
-        }
-    }
+    component Choice: WorkspaceChoice {}
 
     Item {
         id: workspace
@@ -166,47 +215,54 @@ ApplicationWindow {
     ColumnLayout {
         anchors.fill: parent; spacing: 0
         Rectangle {
-            Layout.fillWidth: true; Layout.preferredHeight: compact ? 64 : 88; color: panel
+            objectName: "commandHeader"
+            Layout.fillWidth: true; Layout.preferredHeight: 54; color: panel
             RowLayout {
-                anchors.fill: parent; anchors.margins: compact ? 12 : 22; spacing: 14
-                Rectangle { width: 42; height: 42; radius: 10; color: accent
-                    Text { anchors.centerIn: parent; text: "g"; font.family: "Space Grotesk"; font.pixelSize: 34; font.weight: Font.Bold; color: backend.dark ? bg : panel }
+                anchors.fill: parent; anchors.leftMargin: 12; anchors.rightMargin: 12; spacing: workspace.width < 900 ? 4 : 6
+                WorkLabel {
+                    text: "HeadshotFlow"; color: ink; font.family: "Space Grotesk"
+                    font.pixelSize: workspace.width < 900 ? 16 : 20; font.weight: Font.Bold
+                    Layout.rightMargin: 8
                 }
-                ColumnLayout { spacing: 1
-                    WorkLabel { text: "HeadshotFlow"; font.family: "Space Grotesk"; font.pixelSize: 26; font.weight: Font.Bold; color: ink }
-                    Caption { text: "PORTRAIT WORKSPACE"; font.pixelSize: 9 }
-                }
+                Command { objectName: "addPhotos"; text: "Add photos…"; symbol: "photo"; enabled: !backend.busy; onClicked: photos.open() }
+                Command { objectName: "addFolder"; text: "Add folder…"; symbol: "folder"; iconOnly: compactHeader; quiet: true; enabled: !backend.busy; onClicked: folders.open() }
+                Command { objectName: "loadSample"; text: "Load sample"; symbol: "sample"; iconOnly: compactHeader; quiet: true; enabled: !backend.busy; onClicked: backend.loadSample() }
                 Item { Layout.fillWidth: true }
-                Action { text: "Load sample"; objectName: "loadSample"; visible: hasPhoto; enabled: !backend.busy; onClicked: backend.loadSample() }
-                Action { text: "Workspace"; onClicked: workspaceMenu.popup()
-                    Menu { id: workspaceMenu
+                Command {
+                    objectName: "toggleQueue"; text: queueOpen ? "Hide queue" : "Show queue"
+                    symbol: "queue"; iconOnly: true; quiet: true; checkable: true; checked: queueOpen
+                    onClicked: {queueOpen=checked;if(queueOpen&&workspace.width<1100)adjustmentsOpen=false}
+                }
+                Command {
+                    objectName: "toggleInspector"; text: adjustmentsOpen ? "Hide inspector" : "Show inspector"
+                    symbol: "inspector"; iconOnly: true; quiet: true; checkable: true; checked: adjustmentsOpen
+                    enabled: hasPhoto
+                    onClicked: {adjustmentsOpen=checked;if(adjustmentsOpen&&workspace.width<1100)queueOpen=false}
+                }
+                Command {
+                    objectName: "workspaceActions"; text: "Workspace actions"; symbol: "more"; iconOnly: true; quiet: true
+                    onClicked: workspaceMenu.popup(0, height)
+                    Menu {
+                        id: workspaceMenu
                         WorkMenuItem { text: "Open session…"; enabled: !backend.busy; onTriggered: {fileAction="loadSession";jsonOpen.open()} }
                         WorkMenuItem { text: "Save session…"; enabled: hasPhoto&&!backend.busy; onTriggered: {fileAction="saveSession";jsonSave.open()} }
+                        MenuSeparator {}
+                        WorkMenuItem { text: "Load preset…"; enabled: hasPhoto&&!backend.busy; onTriggered: {fileAction="loadPreset";jsonOpen.open()} }
+                        WorkMenuItem { text: "Save preset…"; enabled: hasPhoto&&!backend.busy; onTriggered: {fileAction="savePreset";jsonSave.open()} }
+                        MenuSeparator {}
+                        WorkMenuItem { text: "Appearance…"; onTriggered: appearanceDialog.open() }
                         WorkMenuItem { text: "Models…"; enabled: !backend.busy; onTriggered: modelDialog.open() }
                     }
                 }
-                Action { text: "Appearance"; onClicked: appearanceDialog.open() }
             }
             Rectangle { anchors.bottom: parent.bottom; width: parent.width; height: 1; color: line }
         }
         RowLayout {
-            Layout.fillWidth: true; Layout.margins: compact ? 12 : 20; Layout.bottomMargin: 10; spacing: 10
-            ColumnLayout { visible: workspace.width >= 900; spacing: 3
-                WorkLabel { text: "A good first impression."; font.family: "Space Grotesk"; font.pixelSize: 23; font.weight: Font.Bold; color: ink }
-                WorkLabel { text: "Frame, refine, and export your portraits. All on your device."; color: muted; font.pixelSize: 12 }
-            }
-            Item { Layout.fillWidth: true }
-            Action { text: queueOpen ? "Hide queue" : "Queue"; onClicked: {queueOpen=!queueOpen;if(queueOpen&&workspace.width<1100)adjustmentsOpen=false} }
-            Action { text: adjustmentsOpen ? "Hide adjustments" : "Adjustments"; onClicked: {adjustmentsOpen=!adjustmentsOpen;if(adjustmentsOpen&&workspace.width<1100)queueOpen=false} }
-            Action { text: "Add photos…"; primary: hasPhoto; enabled: !backend.busy; onClicked: photos.open() }
-            Action { text: "Add folder…"; enabled: !backend.busy; onClicked: openImportFolder() }
-        }
-        RowLayout {
-            Layout.fillWidth: true; Layout.fillHeight: true; Layout.leftMargin: 20; Layout.rightMargin: 20; Layout.bottomMargin: 14; spacing: 16
+            Layout.fillWidth: true; Layout.fillHeight: true; Layout.margins: 12; spacing: 12
             Rectangle {
-                visible: queueOpen; Layout.preferredWidth: 235; Layout.fillHeight: true; radius: 12; color: panel; border.color: line
+                visible: queueOpen; Layout.preferredWidth: 224; Layout.fillHeight: true; radius: 12; color: panel; border.color: line
                 ColumnLayout {
-                    anchors.fill: parent; anchors.margins: 14; spacing: 12
+                    anchors.fill: parent; anchors.margins: 10; spacing: 6
                     RowLayout {
                         Layout.fillWidth: true
                         Caption { text: "Photo queue" }
@@ -217,7 +273,19 @@ ApplicationWindow {
                             color: muted; font.pixelSize: 11
                         }
                     }
-                    Choice { objectName: "queueFilter"; Layout.fillWidth: true; model: ["All photos", "Needs review", "Ready", "Failed", "Exported"]; onActivated: win.filter=currentText }
+                    RowLayout {
+                        Layout.fillWidth: true
+                        Choice { objectName: "queueFilter"; Layout.fillWidth: true; model: ["All photos", "Needs review", "Ready", "Failed", "Exported"]; onActivated: win.filter=currentText }
+                        Command {
+                            objectName: "queueActions"; text: "Queue actions"; symbol: "more"; iconOnly: true; quiet: true
+                            onClicked: queueMenu.popup(0, height)
+                            Menu {
+                                id: queueMenu
+                                WorkMenuItem { objectName: "prepareSelected"; text: "Prepare selected"; enabled: hasSelection&&!backend.busy; onTriggered: backend.batch("",false) }
+                                WorkMenuItem { objectName: "removeSelected"; text: "Remove selected"; enabled: hasSelection&&!backend.busy; onTriggered: backend.removeSelected() }
+                            }
+                        }
+                    }
                     WorkLabel {
                         objectName: "queueHiddenSelectionCount"
                         visible: hiddenSelectedCount > 0
@@ -225,7 +293,8 @@ ApplicationWindow {
                         Layout.fillWidth: true; wrapMode: Text.WordWrap; color: muted; font.pixelSize: 11
                     }
                     ListView {
-                        id: photoList; Layout.fillWidth: true; Layout.fillHeight: true; clip: true; spacing: 6
+                        id: photoList; objectName: "photoQueue"
+                        Layout.fillWidth: true; Layout.fillHeight: true; clip: true; spacing: 6
                         model: visibleQueuePhotos
                         currentIndex: visiblePhotoPosition
                         keyNavigationEnabled: false
@@ -233,15 +302,14 @@ ApplicationWindow {
                         delegate: Rectangle {
                             id: queueRow
                             required property var modelData
-                            width: ListView.view.width; height: 83
+                            width: ListView.view.width; height: 58
                             radius: 8; color: backend.current === modelData.row ? strong : panel; border.color: backend.current === modelData.row ? line : "transparent"
                             MouseArea { anchors.fill: parent; enabled: canNavigate; onClicked: backend.current = queueRow.modelData.row }
                             RowLayout {
                                 anchors.fill: parent; anchors.margins: 7; spacing: 7
                                 WorkCheckBox { checked: modelData.selected; implicitWidth: 26; enabled: !backend.busy; Accessible.name: "Select "+modelData.name; onClicked: backend.select(modelData.row, checked) }
-                                Rectangle { width: 39; height: 52; radius: 4; color: bg; clip: true
-                                    WorkLabel { anchors.centerIn: parent; text: "3:4"; color: muted; font.pixelSize: 10 }
-                                    Image { anchors.fill: parent; source: modelData.state!=="Imported" ? modelData.thumb : ""; fillMode: Image.PreserveAspectCrop; cache: false }
+                                Rectangle { Layout.preferredWidth: 30; Layout.preferredHeight: 40; radius: 4; color: bg; clip: true
+                                    Image { objectName: "queueThumbnail"; anchors.fill: parent; source: modelData.thumb; fillMode: Image.PreserveAspectCrop; cache: false }
                                 }
                                 ColumnLayout { Layout.fillWidth: true; spacing: 5
                                     WorkLabel { text: modelData.name; Layout.fillWidth: true; elide: Text.ElideMiddle; color: ink; font.pixelSize: 11; font.weight: Font.DemiBold }
@@ -250,9 +318,6 @@ ApplicationWindow {
                             }
                         }
                     }
-                    WorkLabel { visible: queuePhotos.length===0; text: "Your photos will appear here."; color: muted; font.pixelSize: 11; Layout.fillWidth: true; wrapMode: Text.WordWrap }
-                    Action { objectName: "prepareSelected"; text: "Prepare selected"; Layout.fillWidth: true; enabled: hasSelection&&!backend.busy; onClicked: backend.batch("",false) }
-                    Action { objectName: "removeSelected"; text: "Remove selected"; Layout.fillWidth: true; enabled: hasSelection&&!backend.busy; onClicked: backend.removeSelected() }
                 }
             }
             ColumnLayout {
@@ -262,17 +327,10 @@ ApplicationWindow {
                     visible: !hasPhoto; Layout.fillWidth: true; Layout.fillHeight: true
                     color: strong; radius: 12
                     DropArea { anchors.fill: parent; onDropped: drop => {if(drop.hasUrls&&!backend.busy)backend.add(drop.urls,true)} }
-                    ColumnLayout {
-                        anchors.centerIn: parent; spacing: 12
-                        GridLayout {
-                            id: importActions
-                            columns: emptyCanvas.width >= 350 ? 3 : 2
-                            Layout.alignment: Qt.AlignHCenter
-                            Action { objectName: "emptyOpenPhotos"; text: "Open photos…"; primary: true; enabled: !backend.busy; onClicked: photos.open() }
-                            Action { objectName: "emptyAddFolder"; text: "Add folder…"; enabled: !backend.busy; onClicked: openImportFolder() }
-                            Action { objectName: "emptyLoadSample"; Layout.columnSpan: importActions.columns === 2 ? 2 : 1; Layout.alignment: Qt.AlignHCenter; text: "Load sample"; enabled: !backend.busy; onClicked: backend.loadSample() }
-                        }
-                        WorkLabel { Layout.alignment: Qt.AlignHCenter; text: "Choose multiple photos or drop them here"; color: muted }
+                    WorkLabel {
+                        anchors.centerIn: parent
+                        text: "Drop photos or a folder here"
+                        color: muted
                     }
                 }
                 SplitView {
@@ -336,23 +394,28 @@ ApplicationWindow {
                     ColumnLayout {
                         SplitView.fillWidth: true; SplitView.minimumWidth: 90; spacing: 8
                         RowLayout {
-                            Layout.fillWidth: true
-                            Caption { text: "Result"; visible: parent.width > 180 }
-                            Action { id: maskHold; objectName: "maskHold"; property int photo: -1; Layout.fillWidth: true; text: "Hold to view mask"; enabled: !!outputUrl && !backend.busy; onPressedChanged: { if (pressed) { forceActiveFocus(); photo = backend.current } else photo = -1 } onActiveFocusChanged: if (!activeFocus) photo = -1 }
+                            id: resultHeader
+                            Layout.fillWidth: true; Layout.preferredHeight: 38
+                            Caption { text: "Result"; Layout.fillWidth: true; elide: Text.ElideRight }
+                            WorkLabel {
+                                visible: resultHeader.width >= 135 && !!backend.result.width
+                                text: backend.result.width + " × " + backend.result.height + " px"
+                                font.family: "Geist Mono"; color: muted; font.pixelSize: 11
+                            }
                         }
                         Rectangle {
                             Layout.fillWidth: true; Layout.fillHeight: true; color: strong; radius: 12; clip: true
                             Image {
                                 id: resultImage; objectName: "resultImage"
-                                smooth: !inspectingMask
                                 anchors.fill: parent; anchors.margins: 12; fillMode: Image.PreserveAspectFit; cache: false
-                                source: outputUrl ? (inspectingMask ? "image://photos/mask?"+backend.revision : outputUrl) : ""
+                                source: outputUrl
                                 Checkerboard { z: -1; x: (resultImage.width-resultImage.paintedWidth)/2; y: (resultImage.height-resultImage.paintedHeight)/2; width: resultImage.paintedWidth; height: resultImage.paintedHeight }
                                 MouseArea {
                                     objectName: "brushInput"
                                     x: (resultImage.width-resultImage.paintedWidth)/2; y: (resultImage.height-resultImage.paintedHeight)/2
                                     width: resultImage.paintedWidth; height: resultImage.paintedHeight
-                                    enabled: !!outputUrl && brushMode!==0 && !backend.busy && backend.settings.background!=="off"
+                                    enabled: !!outputUrl && adjustmentsOpen && inspectorTabs.currentIndex === 1
+                                             && brushMode !== 0 && !backend.busy && backend.settings.background !== "off"
                                     cursorShape: Qt.CrossCursor
                                     property var points: []
                                     function point(mouse) {return [Math.max(0,Math.min(1,mouse.x/width)),Math.max(0,Math.min(1,mouse.y/height))]}
@@ -382,134 +445,195 @@ ApplicationWindow {
                                  : " · " + (visiblePhotoPosition + 1) + " of " + visibleQueuePhotos.length + " visible")
                         color: muted; font.family: "Geist Mono"; font.pixelSize: 11; wrapMode: Text.WordWrap
                     }
-                    Action {
-                        id: previousPhoto; objectName: "previousPhoto"; text: "Previous"
+                    Command {
+                        id: previousPhoto; objectName: "previousPhoto"; text: "Previous photo"
+                        symbol: "previous"; quiet: true; iconOnly: true
                         enabled: canNavigate && previousPhotoRow >= 0
-                        ToolTip.visible: hovered; ToolTip.text: previousPhotoShortcut.nativeText
+                        hint: text + " (" + previousPhotoShortcut.nativeText + ")"
                         onClicked: backend.current = previousPhotoRow
                     }
-                    Action {
-                        id: nextPhoto; objectName: "nextPhoto"; text: "Next"
+                    Command {
+                        id: nextPhoto; objectName: "nextPhoto"; text: "Next photo"
+                        symbol: "next"; quiet: true; iconOnly: true
                         enabled: canNavigate && nextPhotoRow >= 0
-                        ToolTip.visible: hovered; ToolTip.text: nextPhotoShortcut.nativeText
+                        hint: text + " (" + nextPhotoShortcut.nativeText + ")"
                         onClicked: backend.current = nextPhotoRow
                     }
-                    Action {
+                    Command {
                         id: nextReviewPhoto; objectName: "nextReviewPhoto"; text: "Next review"
+                        symbol: "review"; quiet: true; iconOnly: workspace.width < 900
                         enabled: canNavigate && nextReviewPhotoRow >= 0
-                        ToolTip.visible: hovered; ToolTip.text: nextReviewPhotoShortcut.nativeText
+                        hint: text + " (" + nextReviewPhotoShortcut.nativeText + ")"
                         onClicked: backend.current = nextReviewPhotoRow
+                    }
+                    Command {
+                        objectName: "photoActions"; text: "Photo actions"; symbol: "more"; iconOnly: true; quiet: true
+                        onClicked: photoMenu.popup(0, height)
+                        Menu {
+                            id: photoMenu; objectName: "photoMenu"
+                            WorkMenuItem { objectName: "applyAll"; text: "Apply to all…"; enabled: hasPhoto&&!backend.busy; onTriggered: applyAllDialog.open() }
+                            WorkMenuItem { text: "Fully automatic batch"; checkable: true; checked: backend.settings.automatic; enabled: hasPhoto&&!backend.busy; onTriggered: backend.set("automatic",checked) }
+                            MenuSeparator {}
+                            WorkMenuItem { text: "Undo"; enabled: hasPhoto&&!backend.busy; onTriggered: backend.undo() }
+                            WorkMenuItem { text: "Reset photo"; enabled: hasPhoto&&!backend.busy; onTriggered: backend.reset() }
+                            WorkMenuItem { text: "Refresh preview"; enabled: hasPhoto&&!backend.busy; onTriggered: backend.preview() }
+                        }
                     }
                 }
                 RowLayout {
-                    visible: hasPhoto; Layout.fillWidth: true
-                    WorkLabel { text: backend.result.width ? backend.result.width+" × "+backend.result.height+" px · "+Math.round((backend.result.bytes||0)/1024)+" KB" : "360 × 480 px · 3:4 portrait"; font.family: "Geist Mono"; color: muted; font.pixelSize: 11; Layout.fillWidth: true; elide: Text.ElideRight }
-                    Action { text: "Undo"; enabled: hasPhoto&&!backend.busy; onClicked: backend.undo() }
-                    Action { text: "Reset"; enabled: hasPhoto&&!backend.busy; onClicked: backend.reset() }
-                }
-                RowLayout {
-                    visible: hasPhoto; Layout.fillWidth: true; spacing: 8
+                    visible: !!backend.result.warnings; Layout.fillWidth: true; spacing: 8
                     Rectangle {
                         Layout.fillWidth: true; implicitHeight: reviewText.implicitHeight+16; radius: 8; color: panel; border.color: line
                         WorkLabel {
                             id: reviewText; objectName: "reviewReason"
                             anchors.fill: parent; anchors.margins: 8
-                            text: backend.result.warnings ? (backend.result.review === true ? "Needs review · " : "") + backend.result.warnings
-                                                          : "Requested headroom: " + Math.round(backend.settings.headroom * 100) + "% · Crop zoom: " + Math.round(backend.settings.cropZoom || 100) + "%. Drag the frame to adjust placement."
+                            text: (backend.result.review === true ? "Needs review · " : "") + (backend.result.warnings || "")
                             color: backend.result.review === true ? reviewInk : muted
-                            wrapMode: Text.WordWrap; font.pixelSize: 11; maximumLineCount: compact ? 2 : 4; elide: Text.ElideRight
+                            wrapMode: Text.WordWrap; font.pixelSize: 11; maximumLineCount: compact ? 3 : 4; elide: Text.ElideRight
                             ToolTip.visible: warningHover.hovered
                             ToolTip.text: text
                             HoverHandler { id: warningHover }
                         }
                     }
-                    Action { objectName: "approveFraming"; text: compact ? "Approve framing" : "Approve current framing"; visible: backend.result.review===true; enabled: !backend.busy; onClicked: backend.approve() }
+                    Command {
+                        objectName: "approveFraming"; text: compact ? "Approve framing" : "Approve current framing"
+                        symbol: "approve"; visible: backend.result.review === true
+                        enabled: !backend.busy; onClicked: backend.approve()
+                    }
                 }
             }
             Rectangle {
-                visible: adjustmentsOpen; Layout.preferredWidth: 300; Layout.fillHeight: true; radius: 12; color: panel; border.color: line
-                ScrollView {
-                    id: adjustmentsScroll; objectName: "adjustmentsScroll"
-                    anchors.fill: parent; anchors.margins: 16; clip: true; contentWidth: availableWidth
-                    ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
-                    ColumnLayout {
-                        width: adjustmentsScroll.availableWidth; spacing: 13; enabled: hasPhoto&&!backend.busy
-                        Caption { text: "01 / Frame" }
-                        WorkCheckBox { text: "Automatic portrait crop"; checked: backend.settings.autoCrop; onClicked: {backend.set("autoCrop",checked);backend.preview()} }
-                        RowLayout { Layout.fillWidth: true; FieldLabel { text: "Headroom" } Item {Layout.fillWidth: true} WorkLabel { text: Math.round(backend.settings.headroom*100)+"%"; color: muted; font.family: "Geist Mono"; font.pixelSize: 11 } }
-                        Slider { Layout.fillWidth: true; enabled: backend.settings.autoCrop; from: 0; to: .25; stepSize: .01; value: backend.settings.headroom; Accessible.name: "Headroom"; onMoved: {backend.set("headroom",value);if(!pressed)backend.preview()} onPressedChanged: if(!pressed)backend.preview() }
-                        RowLayout { Layout.fillWidth: true
-                            FieldLabel { text: "Crop zoom" }
-                            WorkLabel { objectName: "cropZoomPercent"; text: Math.round(cropZoom.pressed ? cropZoom.value : (backend.settings.cropZoom||100))+"%"; color: ink; font.family: "Geist Mono"; font.pixelSize: 12 }
-                        }
-                        Slider { id: cropZoom; objectName: "cropZoom"; Layout.fillWidth: true; from: 40; to: 100; stepSize: 1; value: backend.settings.cropZoom||100; Accessible.name: "Crop zoom percentage"; onMoved: if(!pressed)backend.setCropZoom(value); onPressedChanged: if(!pressed)backend.setCropZoom(value) }
-                        WorkLabel { text: "40% is wider; 100% is the automatic crop. Headroom applies at every zoom."; Layout.fillWidth: true; wrapMode: Text.WordWrap; color: muted; font.pixelSize: 11 }
-                        RowLayout { Layout.fillWidth: true
-                            Action { text: "Rotate ↶"; Layout.fillWidth: true; onClicked: {backend.set("rotation",backend.settings.rotation-90);backend.preview()} }
-                            Action { text: "Rotate ↷"; Layout.fillWidth: true; onClicked: {backend.set("rotation",backend.settings.rotation+90);backend.preview()} }
-                        }
-                        Rule {}
-                        Caption { text: "02 / Refine" }
-                        RowLayout { Layout.fillWidth: true; FieldLabel { text: "Perceived brightness" } Item {Layout.fillWidth: true} WorkLabel { text: Number(backend.settings.brightness).toFixed(2); color: muted; font.family: "Geist Mono"; font.pixelSize: 11 } }
-                        Slider { objectName: "brightnessSlider"; Layout.fillWidth: true; from: -1; to: 1; stepSize: .02; value: backend.settings.brightness; Accessible.name: "Perceptual brightness"; onMoved: backend.set("brightness",value); onPressedChanged: if(!pressed)backend.preview() }
-                        WorkLabel { text: "Gentle midtone adjustment with protected black and white endpoints."; color: muted; Layout.fillWidth: true; wrapMode: Text.WordWrap; font.pixelSize: 10 }
-                        RowLayout { Layout.fillWidth: true; Action { text: backend.settings.reference ? "Change reference" : "Match reference…"; Layout.fillWidth: true; onClicked: referencePhoto.open() } Action { text: "Clear"; visible: !!backend.settings.reference; onClicked: {backend.set("reference","");backend.preview()} } }
-                        FieldLabel { text: "Background removal" }
-                        Choice { Layout.fillWidth: true; model: ["Off · keep original", "Fast · portrait", "High Quality · portrait"]; currentIndex: ["off","fast","quality"].indexOf(backend.settings.background); onActivated: {backend.set("background",["off","fast","quality"][currentIndex]);backend.preview()} }
-                        WorkLabel { visible: backend.settings.background!=="off"; text: "Removal uses 10 percentage points of wider crop context, where source space permits."; Layout.fillWidth: true; wrapMode: Text.WordWrap; color: muted; font.pixelSize: 11 }
-                        RowLayout { visible: backend.settings.background!=="off"; Layout.fillWidth: true; Choice { Layout.fillWidth: true; model: ["Inspect", "Keep brush", "Remove brush"]; currentIndex: brushMode; onActivated: brushMode=currentIndex } Action { text: "Clear mask"; onClicked: {backend.set("strokes",[]);backend.preview()} } }
-                        RowLayout { visible: backend.settings.background!=="off"; Layout.fillWidth: true
-                            FieldLabel { text: "Edge feather" }
-                            Item { Layout.fillWidth: true }
-                            WorkLabel { objectName: "featherValue"; text: Number(featherSlider.pressed ? featherSlider.value : backend.settings.feather).toFixed(1)+" px"; color: ink; font.family: "Geist Mono"; font.pixelSize: 12 }
-                        }
-                        Slider { id: featherSlider; objectName: "featherSlider"; visible: backend.settings.background!=="off"; Layout.fillWidth: true; from: 0; to: 10; stepSize: .5; value: backend.settings.feather; Accessible.name: "Mask feather"; onMoved: backend.set("feather",value); onPressedChanged: if(!pressed)backend.preview() }
-                        Disclosure { text: "RAW development"; Layout.fillWidth: true
-                            content: ColumnLayout { Layout.fillWidth: true; spacing: 10
-                                FieldLabel { text: "White balance" }
-                                Choice { Layout.fillWidth: true; model: ["Camera", "Daylight", "Cloudy", "Tungsten", "Custom"]; currentIndex: ["camera","daylight","cloudy","tungsten","custom"].indexOf(backend.settings.whiteBalance); onActivated: {backend.set("whiteBalance",currentText.toLowerCase());backend.preview()} }
-                                FieldLabel { text: "Temperature · "+backend.settings.temperature+" K" }
-                                Slider { Layout.fillWidth: true; from: 2000; to: 12000; stepSize: 100; value: backend.settings.temperature; enabled: backend.settings.whiteBalance==="custom"; Accessible.name: "RAW temperature"; onMoved: backend.set("temperature",value); onPressedChanged: if(!pressed)backend.preview() }
-                                FieldLabel { text: "Tint · "+Number(backend.settings.tint).toFixed(2) }
-                                Slider { Layout.fillWidth: true; from: .5; to: 2; stepSize: .05; value: backend.settings.tint; enabled: backend.settings.whiteBalance!=="camera"; Accessible.name: "RAW tint"; onMoved: backend.set("tint",value); onPressedChanged: if(!pressed)backend.preview() }
-                                FieldLabel { text: "Highlight recovery · "+backend.settings.highlight }
-                                Slider { Layout.fillWidth: true; from: 0; to: 9; stepSize: 1; value: backend.settings.highlight; Accessible.name: "RAW highlight recovery"; onMoved: backend.set("highlight",value); onPressedChanged: if(!pressed)backend.preview() }
+                visible: hasPhoto && adjustmentsOpen; Layout.preferredWidth: 270; Layout.fillHeight: true; radius: 12; color: panel; border.color: line
+                ColumnLayout {
+                    anchors.fill: parent; anchors.margins: 12; spacing: 8
+                    TabBar {
+                        id: inspectorTabs; objectName: "inspectorTabs"
+                        Layout.fillWidth: true
+                        currentIndex: 0
+                        background: Rectangle { color: strong; radius: 8 }
+                        InspectorTab { objectName: "frameTab"; text: "Frame" }
+                        InspectorTab { objectName: "refineTab"; text: "Refine" }
+                    }
+                    StackLayout {
+                        Layout.fillWidth: true; Layout.fillHeight: true
+                        currentIndex: inspectorTabs.currentIndex
+                        ScrollView {
+                            id: frameScroll; objectName: "frameScroll"
+                            clip: true; contentWidth: availableWidth
+                            ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
+                            ColumnLayout {
+                                width: frameScroll.availableWidth; spacing: 10
+                                enabled: hasPhoto && !backend.busy
+                                WorkCheckBox { text: "Automatic portrait crop"; checked: backend.settings.autoCrop; onClicked: {backend.set("autoCrop",checked);backend.preview()} }
+                                RowLayout { Layout.fillWidth: true; FieldLabel { text: "Headroom" } Item {Layout.fillWidth: true} WorkLabel { text: Math.round(backend.settings.headroom*100)+"%"; color: muted; font.family: "Geist Mono"; font.pixelSize: 11 } }
+                                Slider { Layout.fillWidth: true; enabled: backend.settings.autoCrop; from: 0; to: .25; stepSize: .01; value: backend.settings.headroom; Accessible.name: "Headroom"; onMoved: {backend.set("headroom",value);if(!pressed)backend.preview()} onPressedChanged: if(!pressed)backend.preview() }
+                                RowLayout { Layout.fillWidth: true
+                                    FieldLabel { text: "Crop zoom" }
+                                    WorkLabel { objectName: "cropZoomPercent"; text: Math.round(cropZoom.pressed ? cropZoom.value : (backend.settings.cropZoom||100))+"%"; color: ink; font.family: "Geist Mono"; font.pixelSize: 12 }
+                                }
+                                Slider { id: cropZoom; objectName: "cropZoom"; Layout.fillWidth: true; from: 40; to: 100; stepSize: 1; value: backend.settings.cropZoom||100; Accessible.name: "Crop zoom percentage"; onMoved: if(!pressed)backend.setCropZoom(value); onPressedChanged: if(!pressed)backend.setCropZoom(value) }
+                                RowLayout { Layout.fillWidth: true
+                                    FieldLabel { text: "Rotate" }
+                                    Command { text: "Rotate left"; symbol: "rotateLeft"; quiet: true; iconOnly: true; onClicked: {backend.set("rotation",backend.settings.rotation-90);backend.preview()} }
+                                    Command { text: "Rotate right"; symbol: "rotateRight"; quiet: true; iconOnly: true; onClicked: {backend.set("rotation",backend.settings.rotation+90);backend.preview()} }
+                                }
                             }
                         }
-                        Rule {}
-                        Caption { text: "03 / Export" }
-                        WorkCheckBox { objectName: "sharpenScreen"; text: "Sharpen for screen"; checked: backend.settings.sharpenScreen; onClicked: {backend.set("sharpenScreen",checked);backend.preview()} }
-                        Choice { objectName: "sharpeningLevel"; Layout.fillWidth: true; enabled: backend.settings.sharpenScreen; model: ["Low", "Standard", "High"]; currentIndex: ["low","standard","high"].indexOf(backend.settings.sharpening); Accessible.name: "Screen sharpening level"; onActivated: {backend.set("sharpening",currentText.toLowerCase());backend.preview()} }
-
-                        WorkCheckBox { text: "Limit to 360 × 480"; checked: backend.settings.capped; onClicked: {backend.set("capped",checked);backend.setSize(0,0);backend.preview()} }
-                        Choice { visible: !backend.settings.capped; Layout.fillWidth: true; model: ["Source crop size", "720 × 960", "1080 × 1440", "Custom…"]; currentIndex: backend.settings.width===0?0:backend.settings.width===720?1:backend.settings.width===1080?2:3; onActivated: {if(currentIndex===3)sizeDialog.open();else{let n=[0,240,360][currentIndex];backend.setSize(n*3,n*4);backend.preview()}} }
-                        Choice { Layout.fillWidth: true; model: ["JPEG · solid background", "PNG · transparency"]; currentIndex: backend.settings.format==="png"?1:0; onActivated: {backend.set("format",currentIndex===0?"jpeg":"png");backend.preview()} }
-                        RowLayout { visible: backend.settings.format==="jpeg"; Layout.fillWidth: true; FieldLabel { text: "Backdrop" } Action { text: backend.settings.backgroundColor; Layout.fillWidth: true; onClicked: backdrop.open() } }
-                        FieldLabel { visible: backend.settings.format==="jpeg"; text: "JPEG quality · "+backend.settings.quality }
-                        Slider { visible: backend.settings.format==="jpeg"; Layout.fillWidth: true; from: 1; to: 100; stepSize: 1; value: backend.settings.quality; Accessible.name: "JPEG quality"; onMoved: backend.set("quality",value); onPressedChanged: if(!pressed)backend.preview() }
-                        Entry { Layout.fillWidth: true; placeholderText: "Filename prefix (optional)"; text: backend.settings.prefix; Accessible.name: "Filename prefix"; onEditingFinished: backend.set("prefix",text) }
-                        WorkCheckBox { text: "Fully automatic batch"; checked: backend.settings.automatic; onClicked: backend.set("automatic",checked) }
-                        WorkLabel { text: backend.settings.automatic ? "Uses the largest face or center crop. Warnings are recorded." : "Uncertain crops wait for your review."; Layout.fillWidth: true; wrapMode: Text.WordWrap; color: muted; font.pixelSize: 10 }
-                        Action { objectName: "applyAll"; text: "Apply to all"; Layout.fillWidth: true; onClicked: applyAllDialog.open() }
-                        WorkLabel { text: "Copy this photo’s settings to the whole queue and future imports."; Layout.fillWidth: true; wrapMode: Text.WordWrap; color: muted; font.pixelSize: 11 }
-                        Action { objectName: "exportZip"; text: "Export queue to ZIP"; Layout.fillWidth: true; enabled: hasPhoto && !backend.busy; onClicked: zipSave.open() }
-                        RowLayout { Layout.fillWidth: true; Action { text: "Load preset"; Layout.fillWidth: true; onClicked: {fileAction="loadPreset";jsonOpen.open()} } Action { text: "Save preset"; Layout.fillWidth: true; onClicked: {fileAction="savePreset";jsonSave.open()} } }
+                        ScrollView {
+                            id: refineScroll; objectName: "refineScroll"
+                            clip: true; contentWidth: availableWidth
+                            ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
+                            ColumnLayout {
+                                width: refineScroll.availableWidth; spacing: 10
+                                enabled: hasPhoto && !backend.busy
+                                RowLayout { Layout.fillWidth: true; FieldLabel { text: "Perceived brightness" } Item {Layout.fillWidth: true} WorkLabel { text: Number(backend.settings.brightness).toFixed(2); color: muted; font.family: "Geist Mono"; font.pixelSize: 11 } }
+                                Slider { objectName: "brightnessSlider"; Layout.fillWidth: true; from: -1; to: 1; stepSize: .02; value: backend.settings.brightness; Accessible.name: "Perceptual brightness"; onMoved: backend.set("brightness",value); onPressedChanged: if(!pressed)backend.preview() }
+                                RowLayout {
+                                    Layout.fillWidth: true
+                                    Command {
+                                        text: backend.settings.reference ? "Change reference" : "Match reference…"
+                                        symbol: "photo"; Layout.fillWidth: true; onClicked: referencePhoto.open()
+                                    }
+                                    Command {
+                                        text: "Remove reference"; symbol: "clear"; quiet: true; iconOnly: true
+                                        visible: !!backend.settings.reference
+                                        onClicked: {backend.set("reference","");backend.preview()}
+                                    }
+                                }
+                                FieldLabel { text: "Background removal" }
+                                Choice { Layout.fillWidth: true; model: ["Off · keep original", "Fast · portrait", "High Quality · portrait"]; currentIndex: ["off","fast","quality"].indexOf(backend.settings.background); onActivated: {backend.set("background",["off","fast","quality"][currentIndex]);backend.preview()} }
+                                RowLayout {
+                                    visible: backend.settings.background !== "off"; Layout.fillWidth: true
+                                    Choice {
+                                        Layout.fillWidth: true
+                                        model: ["Brush off", "Keep brush", "Remove brush"]
+                                        currentIndex: brushMode; onActivated: brushMode = currentIndex
+                                    }
+                                    Command {
+                                        objectName: "clearStrokes"; text: "Clear strokes"; symbol: "clear"
+                                        quiet: true; iconOnly: true; visible: backend.settings.strokes.length > 0
+                                        onClicked: {backend.set("strokes",[]);backend.preview()}
+                                    }
+                                }
+                                RowLayout { visible: backend.settings.background!=="off"; Layout.fillWidth: true
+                                    FieldLabel { text: "Edge feather" }
+                                    Item { Layout.fillWidth: true }
+                                    WorkLabel { objectName: "featherValue"; text: Number(featherSlider.pressed ? featherSlider.value : backend.settings.feather).toFixed(1)+" px"; color: ink; font.family: "Geist Mono"; font.pixelSize: 12 }
+                                }
+                                Slider { id: featherSlider; objectName: "featherSlider"; visible: backend.settings.background!=="off"; Layout.fillWidth: true; from: 0; to: 10; stepSize: .5; value: backend.settings.feather; Accessible.name: "Edge feather"; onMoved: backend.set("feather",value); onPressedChanged: if(!pressed)backend.preview() }
+                                Disclosure { text: "RAW development"; Layout.fillWidth: true
+                                    content: ColumnLayout { Layout.fillWidth: true; spacing: 10
+                                        FieldLabel { text: "White balance" }
+                                        Choice { Layout.fillWidth: true; model: ["Camera", "Daylight", "Cloudy", "Tungsten", "Custom"]; currentIndex: ["camera","daylight","cloudy","tungsten","custom"].indexOf(backend.settings.whiteBalance); onActivated: {backend.set("whiteBalance",currentText.toLowerCase());backend.preview()} }
+                                        FieldLabel { text: "Temperature · "+backend.settings.temperature+" K" }
+                                        Slider { Layout.fillWidth: true; from: 2000; to: 12000; stepSize: 100; value: backend.settings.temperature; enabled: backend.settings.whiteBalance==="custom"; Accessible.name: "RAW temperature"; onMoved: backend.set("temperature",value); onPressedChanged: if(!pressed)backend.preview() }
+                                        FieldLabel { text: "Tint · "+Number(backend.settings.tint).toFixed(2) }
+                                        Slider { Layout.fillWidth: true; from: .5; to: 2; stepSize: .05; value: backend.settings.tint; enabled: backend.settings.whiteBalance!=="camera"; Accessible.name: "RAW tint"; onMoved: backend.set("tint",value); onPressedChanged: if(!pressed)backend.preview() }
+                                        FieldLabel { text: "Highlight recovery · "+backend.settings.highlight }
+                                        Slider { Layout.fillWidth: true; from: 0; to: 9; stepSize: 1; value: backend.settings.highlight; Accessible.name: "RAW highlight recovery"; onMoved: backend.set("highlight",value); onPressedChanged: if(!pressed)backend.preview() }
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }
         }
         WorkLabel { objectName: "autosaveError"; visible: backend.autosaveError.length > 0; text: backend.autosaveError; Layout.fillWidth: true; Layout.leftMargin: 20; Layout.rightMargin: 20; wrapMode: Text.WordWrap; color: ink; font.pixelSize: 12 }
         Rectangle {
-            Layout.fillWidth: true; Layout.preferredHeight: compact ? 56 : 70; color: panel
+            Layout.fillWidth: true; Layout.preferredHeight: 54; color: panel
             Rectangle { width: parent.width; height: 1; color: line }
-            RowLayout { anchors.fill: parent; anchors.margins: 16; spacing: 10
+            RowLayout { anchors.fill: parent; anchors.leftMargin: 12; anchors.rightMargin: 12; spacing: 8
                 Rectangle { width: 7; height: 7; radius: 4; color: backend.busy ? "#bb934f" : "#819483" }
                 WorkLabel { text: backend.processingProgress.length ? backend.processingProgress : backend.message; Layout.fillWidth: true; color: muted; font.pixelSize: 11; wrapMode: Text.WordWrap; maximumLineCount: 2; elide: Text.ElideRight }
                 Action { visible: backend.busy; text: "Cancel"; onClicked: backend.cancel() }
-                Action { text: workspace.width < 900 ? "Refresh" : "Refresh preview"; enabled: hasPhoto&&!backend.busy; onClicked: backend.preview() }
-                Action { text: workspace.width < 900 ? "Export" : "Export current"; enabled: hasPhoto&&!backend.busy; onClicked: {folderAction="current";folders.open()} }
-                Action { objectName: "exportSelected"; text: "Export selected"; primary: true; enabled: hasSelection&&!backend.busy; onClicked: {folderAction="export";folders.open()} }
+                WorkLabel {
+                    visible: hasPhoto && !backend.busy && text.length > 0
+                    text: backend.quickExportScope
+                    color: muted; font.pixelSize: 11
+                }
+                Command { objectName: "exportAs"; text: "Export as…"; symbol: "exportAs"; enabled: hasPhoto&&!backend.busy; onClicked: exportDialog.begin(false) }
+                Command {
+                    objectName: "quickExport"; text: "Quick Export"; symbol: "export"; primary: true
+                    enabled: hasPhoto&&!backend.busy
+                    hint: backend.quickExportDescription
+                    Accessible.description: hint
+                    onClicked: exportDialog.begin(true)
+                }
             }
+        }
+    }
+    component InspectorTab: TabButton {
+        id: tab
+        font.family: "Inter"; font.weight: tab.checked ? Font.DemiBold : Font.Medium
+        implicitHeight: 36
+        Accessible.name: text
+        contentItem: Text { text: tab.text; font: tab.font; color: ink; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
+        background: Rectangle {
+            color: tab.checked || tab.hovered ? panel : "transparent"
+            border.color: tab.activeFocus ? accent : tab.checked ? line : "transparent"
+            border.width: tab.activeFocus ? 2 : 1
+            radius: 8
         }
     }
     component Checkerboard: Canvas {
@@ -541,13 +665,12 @@ ApplicationWindow {
         Action { id: toggle; text: (checked ? "− " : "+ ")+parent.text; checkable: true; Layout.fillWidth: true }
         ColumnLayout { id: holder; visible: toggle.checked; Layout.fillWidth: true }
     }
-    FileDialog { id: zipSave; title: "Export every queued photo to ZIP"; fileMode: FileDialog.SaveFile; defaultSuffix: "zip"; nameFilters: ["ZIP archive (*.zip)"]; onAccepted: backend.exportZip(selectedFile) }
+    ExportDialog { id: exportDialog; controller: backend; hiddenCheckedCount: win.hiddenSelectedCount }
     FileDialog { id: photos; title: "Add photos to the queue"; fileMode: FileDialog.OpenFiles; nameFilters: ["Photos (*.jpg *.jpeg *.png *.webp *.heic *.heif *.tif *.tiff *.dng *.cr2 *.cr3 *.nef *.arw *.raf *.orf *.rw2 *.pef *.raw)","All files (*)"]; onAccepted: backend.add(selectedFiles) }
-    FolderDialog { id: folders; title: folderAction==="import" ? "Add folder (including subfolders)" : "Choose output folder"; onAccepted: {if(folderAction==="import")backend.add([selectedFolder],true);else if(folderAction==="current")backend.exportCurrent(selectedFolder);else backend.batch(selectedFolder,true)} }
+    FolderDialog { id: folders; title: "Add folder (including subfolders)"; onAccepted: backend.add([selectedFolder], true) }
     FileDialog { id: referencePhoto; title: "Choose reference portrait"; onAccepted: backend.setReference(selectedFile) }
     FileDialog { id: jsonOpen; title: "Open "+(fileAction==="loadPreset"?"preset":"session"); nameFilters: ["JSON (*.json)"]; onAccepted: {if(fileAction==="loadPreset")backend.loadPreset(selectedFile);else backend.loadSession(selectedFile)} }
     FileDialog { id: jsonSave; title: "Save "+(fileAction==="savePreset"?"preset":"session"); fileMode: FileDialog.SaveFile; defaultSuffix: "json"; nameFilters: ["JSON (*.json)"]; onAccepted: {if(fileAction==="savePreset")backend.savePreset(selectedFile);else backend.saveSession(selectedFile)} }
-    ColorDialog { id: backdrop; title: "JPEG background color"; onAccepted: {backend.set("backgroundColor",selectedColor.toString());backend.preview()} }
     WorkDialog {
         id: applyAllDialog; objectName: "applyAllConfirmation"; title: "Apply settings to all photos?"
         anchors.centerIn: parent; modal: true; width: Math.min(460, workspace.width - 32)
@@ -576,10 +699,6 @@ ApplicationWindow {
                 Action { text: "Restore"; primary: true; enabled: backend.recoveryRestorable; Layout.fillWidth: true; onClicked: backend.resolveRecovery(true) }
             }
         }
-    }
-    WorkDialog { id: sizeDialog; title: "Custom 3:4 size"; anchors.centerIn: parent; modal: true; standardButtons: Dialog.Ok|Dialog.Cancel
-        ColumnLayout { spacing: 12; WorkLabel { text: "Width (a multiple of 3). Height follows 3:4."; color: ink } SpinBox { font.family: "Inter"; font.weight: Font.Medium; id: customWidth; from: 3; to: 60000; stepSize: 3; value: 720; editable: true } WorkLabel { text: Math.floor(customWidth.value/3)*3+" × "+Math.floor(customWidth.value/3)*4+" px · never upscaled"; color: muted } }
-        onAccepted: {backend.setSize(Math.floor(customWidth.value/3)*3,Math.floor(customWidth.value/3)*4);backend.preview()}
     }
     Connections {
         target: backend
@@ -631,9 +750,9 @@ ApplicationWindow {
         }
     }
     } // scaled workspace
-    Shortcut { sequences: [StandardKey.Open]; onActivated: photos.open() }
-    Shortcut { sequences: [StandardKey.Undo]; onActivated: backend.undo() }
-    Shortcut { sequence: "Ctrl+Return"; onActivated: backend.preview() }
+    Shortcut { sequences: [StandardKey.Open]; enabled: !backend.busy && !exportDialog.visible; onActivated: photos.open() }
+    Shortcut { sequences: [StandardKey.Undo]; enabled: canNavigate; onActivated: backend.undo() }
+    Shortcut { sequence: "Ctrl+Return"; enabled: canNavigate; onActivated: backend.preview() }
     Shortcut { id: previousPhotoShortcut; sequence: "Alt+Left"; enabled: previousPhoto.enabled; onActivated: backend.current = previousPhotoRow }
     Shortcut { id: nextPhotoShortcut; sequence: "Alt+Right"; enabled: nextPhoto.enabled; onActivated: backend.current = nextPhotoRow }
     Shortcut { id: nextReviewPhotoShortcut; sequence: "Alt+Shift+R"; enabled: nextReviewPhoto.enabled; onActivated: backend.current = nextReviewPhotoRow }

@@ -538,6 +538,7 @@ class ControllerTests : public QObject {
         QVERIFY(!qml.rootObjects().isEmpty());
         auto *window = qobject_cast<QQuickWindow *>(qml.rootObjects().first());
         QVERIFY(window);
+        QScopeGuard deleteWindow([&] { qDeleteAll(qml.rootObjects()); });
         c.add({QUrl::fromLocalFile(path)});
         QTRY_VERIFY_WITH_TIMEOUT(!c.busy(), 15000);
         auto *crop = window->findChild<QQuickItem *>("cropOutput");
@@ -581,27 +582,14 @@ class ControllerTests : public QObject {
         const QString captures = qEnvironmentVariable("GIBBON_TEST_SCREENSHOTS");
         if (!captures.isEmpty())
             QDir().mkpath(captures);
-        auto *maskHold = window->findChild<QQuickItem *>("maskHold");
-        QVERIFY(maskHold);
+        QVERIFY(!window->findChild<QQuickItem *>("maskHold"));
         window->requestActivate();
-        maskHold->forceActiveFocus();
-        QTest::keyPress(window, Qt::Key_Space);
-        QTest::qWait(100);
-        QCOMPARE(result->property("smooth").toBool(), false);
-        if (!captures.isEmpty())
-            QVERIFY(window->grabWindow().save(captures + "/lightweight-mask.png"));
-        QTest::keyRelease(window, Qt::Key_Space);
-        QTRY_VERIFY(result->property("smooth").toBool());
-        const auto maskPoint = maskHold->mapToScene(QPointF(maskHold->width()/2, maskHold->height()/2)).toPoint();
-        QTest::mousePress(window, Qt::LeftButton, Qt::NoModifier, maskPoint);
-        QTRY_VERIFY(!result->property("smooth").toBool());
-        QTest::mouseRelease(window, Qt::LeftButton, Qt::NoModifier, maskPoint);
-        QTRY_VERIFY(result->property("smooth").toBool());
-        maskHold->forceActiveFocus();
-        QTest::keyPress(window, Qt::Key_Space);
-        input->forceActiveFocus();
-        QTRY_VERIFY(result->property("smooth").toBool());
-        QTest::keyRelease(window, Qt::Key_Space);
+        QCOMPARE(result->property("source").toUrl(), crop->property("source").toUrl());
+        auto *tabs = window->findChild<QQuickItem *>("inspectorTabs");
+        QVERIFY(tabs);
+        QCOMPARE(tabs->property("currentIndex").toInt(), 0);
+        auto *brush = window->findChild<QQuickItem *>("brushInput");
+        QVERIFY(brush);
         for (int scale : {80, 100, 150})
             for (bool dark : {false, true})
                 for (const auto *accent : {"graphite", "blue"}) {
@@ -649,8 +637,12 @@ class ControllerTests : public QObject {
             QVERIFY(c.result()["cropX"].toDouble() > before);
             verifyOutput();
             window->setProperty("brushMode", 2);
-            auto *brush = window->findChild<QQuickItem *>("brushInput");
-            QVERIFY(brush);
+            QVERIFY(!brush->property("enabled").toBool());
+            window->setProperty("queueOpen", false);
+            window->setProperty("adjustmentsOpen", true);
+            tabs->setProperty("currentIndex", 1);
+            QTRY_VERIFY(brush->property("enabled").toBool());
+            QTest::qWait(100);
             auto center =
                 brush->mapToScene(QPointF(brush->width() / 2, brush->height() / 2)).toPoint();
             QTest::mouseClick(window, Qt::LeftButton, Qt::NoModifier, center);
@@ -662,20 +654,30 @@ class ControllerTests : public QObject {
             QVERIFY(qAbs(point[1].toDouble() - .5) < .02);
             verifyOutput();
             window->setProperty("brushMode", 0);
+            tabs->setProperty("currentIndex", 0);
         }
         // Reopen the scrolling sidebar and appearance popup at the smallest workspace.
         window->setProperty("queueOpen", false);
         window->setProperty("adjustmentsOpen", true);
         QTest::qWait(100);
+        auto *frameTab = window->findChild<QQuickItem *>("frameTab");
+        auto *refineTab = window->findChild<QQuickItem *>("refineTab");
+        auto *frameScroll = window->findChild<QQuickItem *>("frameScroll");
+        auto *refineScroll = window->findChild<QQuickItem *>("refineScroll");
+        QVERIFY(tabs && frameTab && refineTab && frameScroll && refineScroll);
+        QCOMPARE(tabs->property("currentIndex").toInt(), 0);
+        QVERIFY(frameTab->property("checked").toBool());
+        QVERIFY(frameScroll->isVisible());
+        QVERIFY(!refineScroll->isVisible());
         if (!captures.isEmpty())
-            QVERIFY(window->grabWindow().save(captures + "/150-adjustments-1024.png"));
-        auto *scroll = window->findChild<QQuickItem *>("adjustmentsScroll");
-        QVERIFY(scroll);
-        auto *flickable = scroll->property("contentItem").value<QObject *>();
-        QVERIFY(flickable);
-        const double bottom = flickable->property("contentHeight").toDouble() -
-                              flickable->property("height").toDouble();
-        QVERIFY(bottom > 0);
+            QVERIFY(window->grabWindow().save(captures + "/150-frame-1024.png"));
+        const auto tabPoint = refineTab->mapToScene(QPointF(refineTab->width()/2, refineTab->height()/2)).toPoint();
+        QTest::mouseClick(window, Qt::LeftButton, Qt::NoModifier, tabPoint);
+        QTRY_COMPARE(tabs->property("currentIndex").toInt(), 1);
+        QVERIFY(!frameScroll->isVisible());
+        QVERIFY(refineScroll->isVisible());
+        auto *clearStrokes = window->findChild<QQuickItem *>("clearStrokes");
+        QVERIFY(clearStrokes && clearStrokes->isVisible());
         auto *featherValue = window->findChild<QQuickItem *>("featherValue");
         auto *featherSlider = window->findChild<QQuickItem *>("featherSlider");
         QVERIFY(featherValue && featherSlider);
@@ -683,28 +685,24 @@ class ControllerTests : public QObject {
         c.set("feather", 2.5);
         QTRY_COMPARE(featherValue->property("text").toString(), QString("2.5 px"));
         QCOMPARE(featherSlider->property("value").toDouble(), 2.5);
-        auto *flickItem = qobject_cast<QQuickItem *>(flickable);
-        QVERIFY(flickItem);
-        const double featherY = featherSlider->mapToItem(flickItem, QPointF(0, 0)).y();
-        QVERIFY(flickable->setProperty("contentY", qBound(0., featherY - 120., bottom)));
-        QTest::qWait(100);
         if (!captures.isEmpty())
-            QVERIFY(window->grabWindow().save(captures + "/150-feather-1024.png"));
+            QVERIFY(window->grabWindow().save(captures + "/150-refine-1024.png"));
         c.set("feather", 0.);
-        QVERIFY(flickable->setProperty("contentY", bottom));
-        QTest::qWait(100);
-        if (!captures.isEmpty())
-            QVERIFY(window->grabWindow().save(captures + "/150-export-controls-1024.png"));
-        auto *sharpen = window->findChild<QQuickItem *>("sharpenScreen");
-        QVERIFY(sharpen);
-        QVERIFY(sharpen->property("checked").toBool());
-        auto *flickableItem = qobject_cast<QQuickItem *>(flickable);
-        const double sharpeningY = sharpen->mapToItem(flickableItem, QPointF{}).y() +
-                                   flickable->property("contentY").toDouble() - 16;
-        flickable->setProperty("contentY", std::clamp(sharpeningY, 0., bottom));
-        QTest::qWait(100);
-        if (!captures.isEmpty())
-            QVERIFY(window->grabWindow().save(captures + "/150-screen-sharpening-1024.png"));
+        c.set("strokes", QVariantList{});
+        QTRY_VERIFY(!clearStrokes->isVisible());
+        auto *exportAs = window->findChild<QQuickItem *>("exportAs");
+        auto *quickExport = window->findChild<QQuickItem *>("quickExport");
+        QVERIFY(exportAs && quickExport);
+        QVERIFY(exportAs->isVisible() && quickExport->isVisible());
+        QVERIFY(exportAs->mapToScene(QPointF{}).x() >= 0);
+        QVERIFY(quickExport->mapToScene(QPointF(quickExport->width(), 0)).x() <= window->width());
+        const auto *headerSample = window->findChild<QQuickItem *>("loadSample");
+        const auto *headerQueue = window->findChild<QQuickItem *>("toggleQueue");
+        const auto *headerOverflow = window->findChild<QQuickItem *>("workspaceActions");
+        QVERIFY(headerSample && headerQueue && headerOverflow);
+        QVERIFY(!headerSample->property("iconOnly").toBool());
+        QVERIFY(headerSample->mapToScene(QPointF(headerSample->width(), 0)).x() <= headerQueue->mapToScene(QPointF{}).x());
+        QVERIFY(headerOverflow->mapToScene(QPointF(headerOverflow->width(), 0)).x() <= window->width());
         auto *appearance = window->findChild<QObject *>("appearanceDialog");
         QVERIFY(appearance);
         QVERIFY(QMetaObject::invokeMethod(appearance, "open"));
@@ -790,7 +788,7 @@ class ControllerTests : public QObject {
         QCOMPARE(c.items().size(), 4);
         QCOMPARE(c.result()["cropZoom"].toDouble(), 70.);
         window->setProperty("adjustmentsOpen", true);
-        flickable->setProperty("contentY", 0);
+        tabs->setProperty("currentIndex", 0);
         c.setCropZoom(65);
         QTRY_VERIFY_WITH_TIMEOUT(!c.busy(), 15000);
         c.set("headroom", .06);
@@ -828,7 +826,6 @@ class ControllerTests : public QObject {
         QTRY_VERIFY(!c.qualityConfirmationPending());
         QVERIFY(!c.busy());
         QVERIFY(!c.highQualityLoaded());
-        qDeleteAll(qml.rootObjects());
         QSettings().clear();
     }
 
@@ -855,7 +852,7 @@ class ControllerTests : public QObject {
         for (int row = 0; row < c.items().size(); ++row)
             c.select(row, false);
         QVERIFY(count->property("text").toString().contains("0 of 3"));
-        for (const auto *name : {"prepareSelected", "removeSelected", "exportSelected"}) {
+        for (const auto *name : {"prepareSelected", "removeSelected"}) {
             const auto *action = window->findChild<QQuickItem *>(name);
             QVERIFY(action);
             QVERIFY(!action->isEnabled());
@@ -874,7 +871,15 @@ class ControllerTests : public QObject {
         QVERIFY(apply && dialog);
         QVERIFY(apply->isEnabled());
         const auto crop = c.settings()["crop"];
-        QVERIFY(QMetaObject::invokeMethod(apply, "clicked"));
+        const auto *photoActions = window->findChild<QQuickItem *>("photoActions");
+        auto *photoMenu = window->findChild<QObject *>("photoMenu");
+        QVERIFY(photoActions && photoMenu);
+        QTest::mouseClick(window, Qt::LeftButton, Qt::NoModifier,
+                          photoActions->mapToScene(QPointF(photoActions->width()/2, photoActions->height()/2)).toPoint());
+        QTRY_VERIFY(photoMenu->property("visible").toBool());
+        QTRY_VERIFY(apply->isVisible());
+        QTest::mouseClick(window, Qt::LeftButton, Qt::NoModifier,
+                          apply->mapToScene(QPointF(apply->width()/2, apply->height()/2)).toPoint());
         QTRY_VERIFY(dialog->property("visible").toBool());
         QCOMPARE(c.settings()["crop"], crop);
         if (!captures.isEmpty()) {
@@ -889,7 +894,7 @@ class ControllerTests : public QObject {
         QCOMPARE(c.settings()["crop"], crop);
         QVERIFY(!c.busy());
 
-        QVERIFY(QMetaObject::invokeMethod(apply, "clicked"));
+        QVERIFY(QMetaObject::invokeMethod(apply, "triggered"));
         QTRY_VERIFY(dialog->property("visible").toBool());
         const auto *confirm = window->findChild<QQuickItem *>("confirmApplyAll");
         QVERIFY(confirm);
@@ -918,11 +923,12 @@ class ControllerTests : public QObject {
         QVERIFY(window);
         QScopeGuard deleteWindow([&] { qDeleteAll(qml.rootObjects()); });
 
-        const auto *open = window->findChild<QQuickItem *>("emptyOpenPhotos");
-        const auto *sample = window->findChild<QQuickItem *>("emptyLoadSample");
-        const auto *folder = window->findChild<QQuickItem *>("emptyAddFolder");
-        const auto *headerSample = window->findChild<QQuickItem *>("loadSample");
-        QVERIFY(open && sample && folder && headerSample);
+        const auto *header = window->findChild<QQuickItem *>("commandHeader");
+        const auto *open = window->findChild<QQuickItem *>("addPhotos");
+        const auto *folder = window->findChild<QQuickItem *>("addFolder");
+        const auto *sample = window->findChild<QQuickItem *>("loadSample");
+        QVERIFY(header && open && sample && folder);
+        QVERIFY(!window->findChild<QQuickItem *>("emptyOpenPhotos"));
         const auto captures = qEnvironmentVariable("GIBBON_TEST_SCREENSHOTS");
         const QList<QSize> sizes = {{1024, 720}, {1440, 900}};
         auto capture = [&](const QString &name, const QSize &size) {
@@ -940,15 +946,32 @@ class ControllerTests : public QObject {
             QVERIFY(open->isVisible() && open->isEnabled());
             QVERIFY(sample->isVisible() && sample->isEnabled());
             QVERIFY(folder->isVisible() && folder->isEnabled());
-            QVERIFY(!headerSample->isVisible());
+            QCOMPARE(header->height(), 54.);
+            QVERIFY(open->mapToScene(QPointF{}).x() < folder->mapToScene(QPointF{}).x());
+            QVERIFY(folder->mapToScene(QPointF{}).x() < sample->mapToScene(QPointF{}).x());
+            QVERIFY(!folder->property("iconOnly").toBool());
             capture("empty-workspace", size);
         }
         QTest::mouseClick(window, Qt::LeftButton, Qt::NoModifier,
                           sample->mapToScene(QPointF(sample->width() / 2, sample->height() / 2)).toPoint());
         QTRY_VERIFY_WITH_TIMEOUT(!c.busy(), 15000);
         QCOMPARE(c.items().size(), 3);
-        QVERIFY(!open->isVisible() && !sample->isVisible());
-        QVERIFY(headerSample->isVisible());
+        QVERIFY(open->isVisible() && sample->isVisible() && folder->isVisible());
+        auto *photoQueue = window->findChild<QQuickItem *>("photoQueue");
+        QVERIFY(photoQueue && photoQueue->isVisible());
+        photoQueue->polish();
+        QTest::qWait(100);
+        for (int row : {1, 2}) {
+            QCOMPARE(c.items()[row].toMap()["state"].toString(), "Imported");
+            QQuickItem *delegate = nullptr;
+            QVERIFY(QMetaObject::invokeMethod(photoQueue, "itemAtIndex",
+                                              Q_RETURN_ARG(QQuickItem *, delegate), Q_ARG(int, row)));
+            QVERIFY(delegate);
+            const auto *thumbnail = delegate->findChild<QQuickItem *>("queueThumbnail");
+            QVERIFY(thumbnail);
+            QCOMPARE(thumbnail->property("source").toUrl(), c.items()[row].toMap()["thumb"].toUrl());
+            QTRY_COMPARE(thumbnail->property("status").toInt(), 1);
+        }
         capture("sample-batch", sizes.back());
         c.add({QUrl::fromLocalFile(path)});
         QTRY_VERIFY_WITH_TIMEOUT(!c.busy(), 15000);
@@ -1041,7 +1064,7 @@ class ControllerTests : public QObject {
         auto *apply = window->findChild<QQuickItem *>("applyAll");
         auto *confirmation = window->findChild<QObject *>("applyAllConfirmation");
         QVERIFY(apply && confirmation);
-        QVERIFY(QMetaObject::invokeMethod(apply, "clicked"));
+        QVERIFY(QMetaObject::invokeMethod(apply, "triggered"));
         QTRY_VERIFY(confirmation->property("visible").toBool());
         QVERIFY(!next->isEnabled());
         QTest::keyClick(window, Qt::Key_Right, Qt::AltModifier);
