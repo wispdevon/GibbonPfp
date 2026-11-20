@@ -951,6 +951,59 @@ class ControllerTests : public QObject {
         }
     }
 
+    void workspaceMenuDistinguishesUnavailableActions() {
+        QQmlApplicationEngine qml;
+        auto *images = new ImageStore;
+        qml.addImageProvider("photos", images);
+        Controller c(images, nullptr, {}, false);
+        c.setDark(true);
+        c.setUiScale(150);
+        qml.rootContext()->setContextProperty("backend", &c);
+        qml.load(QUrl::fromLocalFile(GIBBON_SOURCE_DIR "/qml/Main.qml"));
+        QVERIFY(!qml.rootObjects().isEmpty());
+        auto *window = qobject_cast<QQuickWindow *>(qml.rootObjects().front());
+        QVERIFY(window);
+        QScopeGuard deleteWindow([&] { qDeleteAll(qml.rootObjects()); });
+        window->resize(1024, 720);
+        window->requestActivate();
+        QTRY_VERIFY(window->isActive());
+        auto *trigger = window->findChild<QQuickItem *>("workspaceActions");
+        auto *menu = window->findChild<QObject *>("workspaceMenu");
+        QVERIFY(trigger && menu);
+        const QSet<QString> needsPhoto = {"Save session…", "Load preset…", "Save preset…"};
+        const auto captures = qEnvironmentVariable("GIBBON_TEST_SCREENSHOTS");
+        for (const bool loaded : {false, true}) {
+            if (loaded) {
+                c.loadSample();
+                QTRY_VERIFY_WITH_TIMEOUT(!c.busy(), 15000);
+            }
+            trigger->forceActiveFocus(Qt::TabFocusReason);
+            QTest::keyClick(window, Qt::Key_Space);
+            QTRY_VERIFY(menu->property("opened").toBool());
+            int matched = 0;
+            for (int row = 0; row < menu->property("count").toInt(); ++row) {
+                QQuickItem *item = nullptr;
+                QVERIFY(QMetaObject::invokeMethod(menu, "itemAt", Q_RETURN_ARG(QQuickItem *, item), Q_ARG(int, row)));
+                const auto label = item ? item->property("text").toString() : QString{};
+                if (label.isEmpty())
+                    continue;
+                const bool needsCurrentPhoto = needsPhoto.contains(label);
+                matched += needsCurrentPhoto;
+                const bool enabled = !needsCurrentPhoto || loaded;
+                QCOMPARE(item->isEnabled(), enabled);
+                QVERIFY2(enabled ? item->opacity() == 1. : item->opacity() < .7, qPrintable(label));
+            }
+            QCOMPARE(matched, needsPhoto.size());
+            if (!captures.isEmpty()) {
+                QVERIFY(QDir().mkpath(captures));
+                const auto name = loaded ? "/workspace-menu-loaded-dark-150.png" : "/workspace-menu-empty-dark-150.png";
+                QVERIFY(window->grabWindow().save(captures + name));
+            }
+            QTest::keyClick(window, Qt::Key_Escape);
+            QTRY_VERIFY(!menu->property("visible").toBool());
+        }
+    }
+
     void panelDividersHaveBoundedWidths() {
         QQmlApplicationEngine qml;
         auto *images = new ImageStore;

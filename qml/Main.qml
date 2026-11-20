@@ -80,6 +80,7 @@ ApplicationWindow {
     component WorkCheckBox: CheckBox { font.family: "Inter"; font.weight: Font.Medium }
     component WorkMenuItem: MenuItem {
         font.family: "Inter"; font.weight: Font.Medium
+        opacity: enabled ? 1 : 0.52
         horizontalPadding: 12
         implicitHeight: Math.max(32, Math.max(implicitContentHeight, implicitIndicatorHeight)
                                  + topPadding + bottomPadding)
