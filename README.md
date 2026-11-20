@@ -26,9 +26,9 @@ pictures. Import portraits, adjust framing and brightness, optionally remove the
 background, and export a single photo or a batch without overwriting originals.
 The default output is **360 × 480 pixels, portrait 3:4**, with **70% crop zoom, 8% headroom, Fast background removal, white JPEG backdrop, JPEG quality 80, and Standard screen sharpening**.
 
-![Native HeadshotFlow workspace with the built-in sample, 6% headroom, and 65% crop zoom](docs/images/workspace.png)
+![Native HeadshotFlow workspace with three checked sample portraits, the Frame tab, and a 360 × 480 Result](docs/images/workspace.png)
 
-*Native Linux screenshot using Fast background removal on the built-in portrait of a fictional person.*
+*Native Linux screenshot showing the three built-in sample portraits with Fast background removal.*
 
 <details>
 <summary>Table of contents</summary>
@@ -52,15 +52,16 @@ The default output is **360 × 480 pixels, portrait 3:4**, with **70% crop zoom,
 
 ### Features
 
-- **Side-by-side editing:** editable Preview / Crop and decoded export Result,
-  with a draggable divider and collapsible queue and adjustment panels.
+- **Side-by-side editing:** source framing in **Preview / Crop** and the decoded
+  current-photo export preview in **Result**, with a draggable divider and
+  collapsible queue and **Frame** / **Refine** inspector.
 - **Portrait framing:** face-aware automatic crops, adjustable headroom,
   **40–100% crop zoom**, dragging, arrow keys, rotation, and per-photo review gates.
-- **A built-in sample:** try framing and background removal on a generated portrait
-  of a fictional person.
+- **A built-in sample batch:** try framing and background removal on three generated
+  portraits. Loading it again returns to the first sample without duplicating the batch.
 - **Refinement:** perceptual brightness and reference-portrait brightness matching.
-- **Local background removal:** Fast or optional High Quality, mask inspection,
-  keep/remove brushes, feathering, and transparency.
+- **Local background removal:** Fast or optional High Quality, Keep/Remove brushes,
+  feathering, and transparency.
 - **Screen sharpening:** enabled by default at Standard; choose Low / Standard /
   High or turn it off.
 - **Flexible output:** JPEG or PNG, default size cap, source-sized or custom 3:4
@@ -129,38 +130,63 @@ See [Arch packaging](docs/BUILDING.md#arch-linux--aur-and-local-updates).
 
 ## Desktop usage
 
-Start with **Load sample**, or bring in portraits with **Add photos…** or
-**Add folder…**. Folder import includes subfolders. Open a photo in the editor to
-adjust **Frame**, **Refine**, and **Export**, then check the encoded output in **Result**.
-See the [desktop quickstart](docs/quickstart.md) for your first export.
+The slim toolbar provides **Add photos…**, **Add folder…**, and **Load sample**.
+The queue and inspector buttons show or hide those panels. **Workspace actions**
+contains **Open session…**, **Save session…**, **Load preset…**, **Save preset…**,
+**Appearance…**, and **Models…**. **Photo actions** contains **Apply to all…**,
+**Fully automatic batch**, **Undo**, **Reset photo**, and **Refresh preview**.
+**Queue actions** contains **Prepare selected** and **Remove selected**.
 
-| Command | Photos it affects |
-| --- | --- |
-| **Export current** | The open photo, regardless of its checkbox |
-| **Prepare selected**, **Export selected**, **Remove selected** | Checked photos, including those hidden by the queue filter |
-| **Apply to all** | Every queued photo and future imports |
-| **Export queue to ZIP** | Every queued photo |
+**Load sample** adds a built-in batch of three generated portraits. On a fresh
+workspace, all three are checked. Loading the sample again returns to its first
+photo, adds any missing sample entries, and leaves existing sample settings and
+checked states in place. Folder import with **Add folder…** includes subfolders.
+See the [desktop quickstart](docs/quickstart.md) for a guided batch export.
+
+The editor has **Frame** and **Refine** tabs. **Preview / Crop** shows the source
+with the crop frame. The completed photo preview appears inside that frame. Drag
+the frame or use the arrow keys. **Result** shows the decoded output for the
+current photo using its current settings. It does not change to reflect output
+size or style edits made in **Export as…**. Those choices customize the export
+without changing the photo’s editor settings. In a batch, **Result** is the
+current photo’s preview, not a preview of every queued photo.
+
+In **Refine**, choose **Keep brush** or **Remove brush** and paint directly on
+**Result** to correct the automatic background mask. **Clear strokes** removes
+the current photo’s corrections. A framing edit clears those strokes. Undo and
+presets are also scoped to the open photo unless you confirm **Apply to all…**.
+Applying to all copies the open photo’s controls to every queued photo and future
+imports, recalculates crops, clears manual framing and brush strokes, and
+invalidates approvals.
 
 The queue shows the checked count and how many checked photos a filter hides.
-Use **Previous** and **Next** to move through the active filter. **Next review**
-finds another photo needing review anywhere in the queue and keeps the filter.
+**Previous** and **Next** move through the active filter. **Next review** finds
+another photo needing review anywhere in the queue and keeps the filter. Prepare,
+export, and remove actions include checked photos hidden by the filter.
 
-Edits apply to the open photo. Confirm **Apply to all** to copy its controls,
-recalculate each crop, clear manual framing and brush strokes, and invalidate
-approvals.
-Sessions and recovery preserve the queue’s import defaults. Older sessions retain
-explicit photo settings and use factory defaults for new imports.
+In **Export as…**, choose one of three scopes. **Current photo** exports the open
+photo regardless of its checkbox. **Checked photos** includes checked photos,
+including those hidden by the filter. **Whole queue ZIP** includes every queued
+photo. The dialog sets output size, format, filename prefix, JPEG quality and
+backdrop, and screen sharpening when you choose a shared style. **Use each photo’s
+output settings** applies each photo’s assigned format, size, prefix, and related
+settings. Turn it off to edit a shared style. With three sample photos checked
+and no prior successful export, the first export defaults to **Checked photos (3)**
+with **Use each photo’s output settings** enabled.
 
-For **Needs review**, read the framing warning, adjust the crop as needed, and use
-**Approve current framing** when satisfied. Approval is per photo. If you choose
-**Fully automatic batch**, it allows fallback framing and records warnings. Use
-**Apply to all** if you want that policy across the queue.
-
-Folder exports save successful photos and write a JSON report. A hold, failure,
-or cancellation can leave a partial export on disk. **Export queue to ZIP** under
-**Export** commits the archive only after every photo passes processing and review.
-A hold, failure, or cancellation leaves the destination intact. A successful ZIP
-contains `export-report.json`. Duplicate output names receive numeric suffixes.
+If there is no remembered successful destination, the first click on **Quick Export**
+opens **Export as…**. After a successful export, **Quick Export** repeats its scope,
+settings, and destination. A newly loaded preset for the current photo takes
+precedence over a remembered shared output style on the next Quick Export.
+Checked-photo export with per-photo settings continues to use each photo’s
+assigned settings. A missing or unwritable destination opens **Export as…** so
+you can choose another. If the
+remembered ZIP already exists, Quick Export opens the dialog and asks before
+replacing it. Folder exports save successful photos and write a JSON report. A
+hold, failure, or cancellation can leave a partial folder export. A ZIP is
+published only after every photo passes processing and review, and a failure or
+cancellation leaves the existing destination intact. A successful ZIP contains
+`export-report.json`. Duplicate output names receive numeric suffixes.
 
 ### Crop, headroom, and zoom
 
@@ -174,27 +200,27 @@ contains `export-report.json`. Duplicate output names receive numeric suffixes.
   sessions preserve the selected zoom. Older sessions with a manual crop use that
   saved frame as their 100% baseline.
 
-Both panes share the completed export preview. The left shows it inside the crop,
-with the source dimmed outside; the right shows **Updating…** while processing.
-Mouse-driven sliders and crop dragging process on release. **Refresh preview**
-explicitly recomputes the current settings.
+The completed current-photo preview appears inside the crop in **Preview / Crop**,
+with the source dimmed outside. **Result** shows the decoded output. It shows
+**Updating…** while processing. Mouse-driven sliders and crop dragging process on
+release. **Refresh preview** explicitly recomputes the current settings.
 
-**Load sample** opens an embedded, generated portrait from the app cache. It uses
-the same local face detection and background removal as imported photos. Repeated
-clicks select its existing queue entry.
+The three embedded sample portraits use the same local face detection and
+background removal as imported photos. They are copied to the app cache. Repeated
+**Load sample** clicks return to the first existing sample and do not duplicate
+the batch.
 
 ### Masks and screen sharpening
 
-Press and hold **Hold to view mask** in the right pane with the pointer or focus
-it and hold **Space**. Releasing it, moving focus, or changing photos restores
-the encoded result. Brushes also work on the composite preview.
 Both removal modes see **10 percentage points of wider crop context**: a 65%
 export crop uses a 55% removal frame, and 40% uses a removal-only 30% frame.
 The extra frame follows the current crop position and headroom anchor, limited
 by source boundaries. The predicted mask is mapped back onto your selected crop;
 export framing, dimensions, and brush coordinates stay unchanged. This puts model
 boundary imperfections farther outside the finished crop where space permits.
-Keep/remove brushes work on crop coordinates. Framing changes clear strokes;
+In **Refine**, paint **Keep brush** and **Remove brush** strokes directly on
+**Result** to correct the mask on the open photo. **Clear strokes** removes them.
+Framing changes clear strokes. The brush coordinates follow the visible output.
 **Edge feather** shows its value in output pixels (0–10 px, in 0.5 px steps).
 New photo settings default to **0.0 px**, so Fast has no added feather blur.
 Fast uses MODNet portrait matting at 512 × 512, then refines its prediction against the source crop at up to
@@ -206,10 +232,9 @@ This is higher-resolution reconstruction, not a higher-resolution neural model,
 and cannot recover every missed hair or separate similar-colored regions.
 Uncertain boundary probabilities and mask resizing can still produce
 partially transparent pixels at zero. Feathering affects the automatic mask;
-manual Keep/Remove strokes are applied afterward with firm edges. Mask inspection
-uses unsmoothed pixels so brush boundaries remain clear. Increase feathering to
-add blur to the automatic mask explicitly;
-saved presets and sessions retain their chosen value. Transparent pixels appear
+manual Keep/Remove strokes are applied afterward with firm edges. Increase
+feathering to add blur to the automatic mask explicitly. Saved presets and
+sessions retain their chosen value. Transparent pixels appear
 against a checkerboard.
 Export PNG to retain transparency or JPEG to composite onto the selected backdrop.
 
@@ -233,8 +258,9 @@ typography and scaling. On Linux, HeadshotFlow defaults to Qt's built-in dialogs
 On systems with a working portal theme, launch `gibbonpfp -platformtheme xdgdesktopportal`
 to use the system's configured file chooser. Export dimensions do not change.
 
-**Queue** and **Adjustments** toggle sidebars; narrow workspaces show one at a time.
-Adjustments scroll independently. **Workspace** contains sessions and model management.
+The queue and inspector buttons toggle sidebars. Narrow workspaces show one at a
+time. Inspector tabs scroll independently. **Workspace actions** contains session,
+preset, appearance, and model commands.
 
 ## Background removal and hardware
 
