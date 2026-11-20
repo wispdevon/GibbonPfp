@@ -13,6 +13,7 @@
 #include <QStandardPaths>
 #include <QStyleHints>
 #include <QtConcurrent>
+#include <algorithm>
 
 using namespace gibbon;
 static QString thumbnailKey(const QString &path) {
@@ -148,6 +149,11 @@ QVariantList Controller::items() const {
             {"thumb", QString("image://photos/%1?%2").arg(thumbnailKey(q.path)).arg(generation)}};
     }
     return list;
+}
+int Controller::selectedCount() const {
+    return int(std::count_if(queue.cbegin(), queue.cend(), [](const Item &item) {
+        return item.selected;
+    }));
 }
 QVariantMap Controller::settings() const {
     return index >= 0 ? queue[index].settings.json().toVariantMap()
@@ -344,7 +350,7 @@ void Controller::approve() {
     emit changed();
 }
 void Controller::removeSelected() {
-    if (working)
+    if (working || selectedCount() == 0)
         return;
     for (int i = queue.size() - 1; i >= 0; --i)
         if (queue[i].selected)
@@ -459,10 +465,16 @@ void Controller::preview() {
     }));
 }
 void Controller::batch(const QUrl &dir, bool exportFiles) {
+    if (working)
+        return;
     QVector<int> rows;
     for (int i = 0; i < queue.size(); ++i)
         if (queue[i].selected)
             rows << i;
+    if (rows.isEmpty()) {
+        fail("Select photos in the queue first");
+        return;
+    }
     processMany(rows, dir.toLocalFile(), exportFiles);
 }
 void Controller::exportCurrent(const QUrl &dir) {

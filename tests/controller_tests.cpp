@@ -86,6 +86,31 @@ class ControllerTests : public QObject {
         c.exportZip(zip); c.cancel(); QTRY_VERIFY_WITH_TIMEOUT(!c.busy(), 15000);
         QVERIFY(file.open(QIODevice::ReadOnly)); QCOMPARE(file.readAll(), complete);
     }
+    void emptySelectionLeavesCurrentPhotoInPlace() {
+        QTemporaryDir dir;
+        QImage photo(120, 160, QImage::Format_RGB32);
+        photo.fill(Qt::gray);
+        const auto path = dir.filePath("portrait.png");
+        QVERIFY(photo.save(path));
+        ImageStore images;
+        Controller c(&images, nullptr, {}, false);
+        c.add({QUrl::fromLocalFile(path)});
+        QTRY_VERIFY_WITH_TIMEOUT(!c.busy(), 15000);
+        c.loadSample();
+        QTRY_VERIFY_WITH_TIMEOUT(!c.busy(), 15000);
+        QCOMPARE(c.current(), 1);
+        c.select(0, false);
+        c.select(1, false);
+        const auto revision = c.revision();
+        c.removeSelected();
+        QCOMPARE(c.current(), 1);
+        QCOMPARE(c.items().size(), 2);
+        QCOMPARE(c.revision(), revision);
+        QVERIFY(!c.busy());
+        c.batch(QUrl::fromLocalFile(dir.path()), true);
+        QVERIFY(!c.busy());
+        QVERIFY(c.message().contains("Select photos"));
+    }
     void workspaceSavesProtectSourcePhotos() {
         QTemporaryDir dir;
         const auto path = dir.filePath("portrait.png");
@@ -765,6 +790,73 @@ class ControllerTests : public QObject {
         QVERIFY(!c.highQualityLoaded());
         qDeleteAll(qml.rootObjects());
         QSettings().clear();
+    }
+
+    void queueControlsAndApplyConfirmation() {
+        QQmlApplicationEngine qml;
+        auto *images = new ImageStore;
+        qml.addImageProvider("photos", images);
+        Controller c(images, nullptr, {}, false);
+        c.setUiScale(100);
+        qml.rootContext()->setContextProperty("backend", &c);
+        qml.load(QUrl::fromLocalFile(GIBBON_SOURCE_DIR "/qml/Main.qml"));
+        QVERIFY(!qml.rootObjects().isEmpty());
+        auto *window = qobject_cast<QQuickWindow *>(qml.rootObjects().front());
+        QVERIFY(window);
+        QScopeGuard deleteWindow([&] { qDeleteAll(qml.rootObjects()); });
+        c.loadSample();
+        QTRY_VERIFY_WITH_TIMEOUT(!c.busy(), 15000);
+        c.set("background", "off");
+        c.preview();
+        QTRY_VERIFY_WITH_TIMEOUT(!c.busy(), 15000);
+        const auto *count = window->findChild<QQuickItem *>("queueSelectionCount");
+        QVERIFY(count);
+        QVERIFY(count->property("text").toString().contains("1 of 1"));
+        c.select(0, false);
+        QVERIFY(count->property("text").toString().contains("0 of 1"));
+        for (const auto *name : {"prepareSelected", "removeSelected", "exportSelected"}) {
+            const auto *action = window->findChild<QQuickItem *>(name);
+            QVERIFY(action);
+            QVERIFY(!action->isEnabled());
+        }
+        const auto captures = qEnvironmentVariable("GIBBON_TEST_SCREENSHOTS");
+        if (!captures.isEmpty()) {
+            QDir().mkpath(captures);
+            QTest::qWait(100);
+            QVERIFY(window->grabWindow().save(captures + "/queue-no-selection.png"));
+        }
+
+        c.setCrop(.2, .2, .5, .5);
+        QTRY_VERIFY_WITH_TIMEOUT(!c.busy(), 15000);
+        auto *apply = window->findChild<QQuickItem *>("applyAll");
+        auto *dialog = window->findChild<QObject *>("applyAllConfirmation");
+        QVERIFY(apply && dialog);
+        QVERIFY(apply->isEnabled());
+        const auto crop = c.settings()["crop"];
+        QVERIFY(QMetaObject::invokeMethod(apply, "clicked"));
+        QTRY_VERIFY(dialog->property("visible").toBool());
+        QCOMPARE(c.settings()["crop"], crop);
+        if (!captures.isEmpty()) {
+            QTest::qWait(100);
+            QVERIFY(window->grabWindow().save(captures + "/apply-to-all-confirmation.png"));
+        }
+        const auto *cancel = window->findChild<QQuickItem *>("cancelApplyAll");
+        QVERIFY(cancel);
+        QTest::mouseClick(window, Qt::LeftButton, Qt::NoModifier,
+                          cancel->mapToScene(QPointF(cancel->width() / 2, cancel->height() / 2)).toPoint());
+        QTRY_VERIFY(!dialog->property("visible").toBool());
+        QCOMPARE(c.settings()["crop"], crop);
+        QVERIFY(!c.busy());
+
+        QVERIFY(QMetaObject::invokeMethod(apply, "clicked"));
+        QTRY_VERIFY(dialog->property("visible").toBool());
+        const auto *confirm = window->findChild<QQuickItem *>("confirmApplyAll");
+        QVERIFY(confirm);
+        QTest::mouseClick(window, Qt::LeftButton, Qt::NoModifier,
+                          confirm->mapToScene(QPointF(confirm->width() / 2, confirm->height() / 2)).toPoint());
+        QTRY_VERIFY(!dialog->property("visible").toBool());
+        QTRY_VERIFY_WITH_TIMEOUT(!c.busy(), 15000);
+        QVERIFY(c.settings()["crop"] != crop);
     }
 
     void cropZoomState() {

@@ -27,6 +27,7 @@ class Controller : public QObject {
     Q_PROPERTY(QString recoveryMessage READ recoveryMessage NOTIFY recoveryChanged)
     Q_PROPERTY(QString autosaveError READ autosaveError NOTIFY recoveryChanged)
     Q_PROPERTY(QVariantList items READ items NOTIFY changed)
+    Q_PROPERTY(int selectedCount READ selectedCount NOTIFY changed)
     Q_PROPERTY(QVariantMap settings READ settings NOTIFY changed)
     Q_PROPERTY(QVariantMap result READ result NOTIFY changed)
     Q_PROPERTY(int current READ current WRITE setCurrent NOTIFY changed)
@@ -53,6 +54,7 @@ class Controller : public QObject {
     QString autosaveError() const { return recoveryError; }
     Q_INVOKABLE void resolveRecovery(bool restore);
     QVariantList items() const;
+    int selectedCount() const;
     QVariantMap settings() const;
     QVariantMap result() const {
         return details;

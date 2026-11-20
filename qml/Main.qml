@@ -30,6 +30,7 @@ ApplicationWindow {
     property string folderAction: "import"
     property string filter: "All photos"
     readonly property bool hasPhoto: backend.current >= 0
+    readonly property bool hasSelection: backend.selectedCount > 0
     palette.window: panel
     palette.windowText: ink
     palette.text: ink
@@ -135,7 +136,16 @@ ApplicationWindow {
                 visible: queueOpen; Layout.preferredWidth: 235; Layout.fillHeight: true; radius: 12; color: panel; border.color: line
                 ColumnLayout {
                     anchors.fill: parent; anchors.margins: 14; spacing: 12
-                    RowLayout { Layout.fillWidth: true; Caption { text: "Photo queue" } Item {Layout.fillWidth: true} WorkLabel { text: backend.items.length.toString().padStart(2,"0"); color: muted; font.family: "Geist Mono"; font.pixelSize: 13 } }
+                    RowLayout {
+                        Layout.fillWidth: true
+                        Caption { text: "Photo queue" }
+                        Item { Layout.fillWidth: true }
+                        WorkLabel {
+                            objectName: "queueSelectionCount"
+                            text: backend.selectedCount + " of " + backend.items.length + " selected"
+                            color: muted; font.pixelSize: 11
+                        }
+                    }
                     Choice { Layout.fillWidth: true; model: ["All photos", "Needs review", "Ready", "Failed", "Exported"]; onActivated: win.filter=currentText }
                     ListView {
                         id: photoList; Layout.fillWidth: true; Layout.fillHeight: true; clip: true; spacing: 6; model: backend.items
@@ -162,8 +172,8 @@ ApplicationWindow {
                         }
                     }
                     WorkLabel { visible: backend.items.length===0; text: "Your photos will appear here."; color: muted; font.pixelSize: 11; Layout.fillWidth: true; wrapMode: Text.WordWrap }
-                    Action { text: "Prepare selected"; Layout.fillWidth: true; enabled: hasPhoto&&!backend.busy; onClicked: backend.batch("",false) }
-                    Action { text: "Remove selected"; Layout.fillWidth: true; enabled: hasPhoto&&!backend.busy; onClicked: backend.removeSelected() }
+                    Action { objectName: "prepareSelected"; text: "Prepare selected"; Layout.fillWidth: true; enabled: hasSelection&&!backend.busy; onClicked: backend.batch("",false) }
+                    Action { objectName: "removeSelected"; text: "Remove selected"; Layout.fillWidth: true; enabled: hasSelection&&!backend.busy; onClicked: backend.removeSelected() }
                 }
             }
             ColumnLayout {
@@ -348,8 +358,8 @@ ApplicationWindow {
                         Entry { Layout.fillWidth: true; placeholderText: "Filename prefix (optional)"; text: backend.settings.prefix; Accessible.name: "Filename prefix"; onEditingFinished: backend.set("prefix",text) }
                         WorkCheckBox { text: "Fully automatic batch"; checked: backend.settings.automatic; onClicked: backend.set("automatic",checked) }
                         WorkLabel { text: backend.settings.automatic ? "Uses the largest face or center crop. Warnings are recorded." : "Uncertain crops wait for your review."; Layout.fillWidth: true; wrapMode: Text.WordWrap; color: muted; font.pixelSize: 10 }
-                        Action { objectName: "applyAll"; text: "Apply to all"; Layout.fillWidth: true; onClicked: backend.applyAll() }
-                        WorkLabel { text: "Edits affect this photo. Apply to all resets framing and brushes on every photo; later imports inherit these settings."; Layout.fillWidth: true; wrapMode: Text.WordWrap; color: muted; font.pixelSize: 11 }
+                        Action { objectName: "applyAll"; text: "Apply to all"; Layout.fillWidth: true; onClicked: applyAllDialog.open() }
+                        WorkLabel { text: "Copy this photo’s settings to the whole queue and future imports."; Layout.fillWidth: true; wrapMode: Text.WordWrap; color: muted; font.pixelSize: 11 }
                         Action { objectName: "exportZip"; text: "Export queue to ZIP"; Layout.fillWidth: true; enabled: hasPhoto && !backend.busy; onClicked: zipSave.open() }
                         RowLayout { Layout.fillWidth: true; Action { text: "Load preset"; Layout.fillWidth: true; onClicked: {fileAction="loadPreset";jsonOpen.open()} } Action { text: "Save preset"; Layout.fillWidth: true; onClicked: {fileAction="savePreset";jsonSave.open()} } }
                     }
@@ -366,7 +376,7 @@ ApplicationWindow {
                 Action { visible: backend.busy; text: "Cancel"; onClicked: backend.cancel() }
                 Action { text: workspace.width < 900 ? "Refresh" : "Refresh preview"; enabled: hasPhoto&&!backend.busy; onClicked: backend.preview() }
                 Action { text: workspace.width < 900 ? "Export" : "Export current"; enabled: hasPhoto&&!backend.busy; onClicked: {folderAction="current";folders.open()} }
-                Action { text: "Export selected"; primary: true; enabled: hasPhoto&&!backend.busy; onClicked: {folderAction="export";folders.open()} }
+                Action { objectName: "exportSelected"; text: "Export selected"; primary: true; enabled: hasSelection&&!backend.busy; onClicked: {folderAction="export";folders.open()} }
             }
         }
     }
@@ -406,6 +416,25 @@ ApplicationWindow {
     FileDialog { id: jsonOpen; title: "Open "+(fileAction==="loadPreset"?"preset":"session"); nameFilters: ["JSON (*.json)"]; onAccepted: {if(fileAction==="loadPreset")backend.loadPreset(selectedFile);else backend.loadSession(selectedFile)} }
     FileDialog { id: jsonSave; title: "Save "+(fileAction==="savePreset"?"preset":"session"); fileMode: FileDialog.SaveFile; defaultSuffix: "json"; nameFilters: ["JSON (*.json)"]; onAccepted: {if(fileAction==="savePreset")backend.savePreset(selectedFile);else backend.saveSession(selectedFile)} }
     ColorDialog { id: backdrop; title: "JPEG background color"; onAccepted: {backend.set("backgroundColor",selectedColor.toString());backend.preview()} }
+    WorkDialog {
+        id: applyAllDialog; objectName: "applyAllConfirmation"; title: "Apply settings to all photos?"
+        anchors.centerIn: parent; modal: true; width: Math.min(460, workspace.width - 32)
+        closePolicy: Popup.CloseOnEscape
+        onOpened: cancelApplyAll.forceActiveFocus()
+        onAccepted: backend.applyAll()
+        ColumnLayout {
+            width: parent.width; spacing: 16
+            WorkLabel {
+                text: "This copies the current settings to every queued photo, including unchecked photos. It resets manual framing, mask brush strokes, and approvals. Future imports will use these settings."
+                Layout.fillWidth: true; wrapMode: Text.WordWrap; color: ink
+            }
+            RowLayout {
+                Layout.fillWidth: true
+                Action { id: cancelApplyAll; objectName: "cancelApplyAll"; text: "Cancel"; Layout.fillWidth: true; onClicked: applyAllDialog.reject() }
+                Action { objectName: "confirmApplyAll"; text: "Apply to all"; primary: true; Layout.fillWidth: true; onClicked: applyAllDialog.accept() }
+            }
+        }
+    }
     WorkDialog { id: recoveryDialog; objectName: "recoveryDialog"; title: "Restore workspace?"; anchors.centerIn: parent; modal: true; width: Math.min(460, workspace.width - 32); closePolicy: Popup.NoAutoClose
         ColumnLayout { width: parent.width; spacing: 16
             WorkLabel { text: backend.recoveryMessage; Layout.fillWidth: true; wrapMode: Text.WordWrap; color: ink }
