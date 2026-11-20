@@ -199,11 +199,15 @@ void Controller::loadSample() {
         fail("Could not create the sample image directory");
         return;
     }
-    const auto path = directory + "/gibbon-sample.png";
-    QSaveFile file(path);
-    const auto data = Engine::samplePortrait();
-    if (!file.open(QIODevice::WriteOnly) || file.write(data) != data.size() || !file.commit()) {
-        fail("Could not save the sample image");
+    // Preserve the previous sample path for saved sessions. QFile::copy also
+    // leaves any existing file at the new path untouched.
+    const QString resource = Engine::samplePortraitResource;
+    const auto path = QDir(directory).filePath(QFileInfo(resource).fileName());
+    const auto fingerprint = sourceFingerprint(resource);
+    if (!QFileInfo::exists(path))
+        QFile::copy(resource, path);
+    if (fingerprint.isEmpty() || sourceFingerprint(path) != fingerprint) {
+        fail("Could not create or verify the cached sample image");
         return;
     }
     for (int i = 0; i < queue.size(); ++i)
@@ -212,7 +216,7 @@ void Controller::loadSample() {
             return;
         }
     const int row = queue.size();
-    Item sample; sample.settings = importDefaults; sample.path = path; sample.fingerprint = sourceFingerprint(path);
+    Item sample; sample.settings = importDefaults; sample.path = path; sample.fingerprint = fingerprint;
     queue.push_back(sample);
     setCurrent(row);
 }

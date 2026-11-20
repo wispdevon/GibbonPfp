@@ -170,9 +170,13 @@ class ControllerTests : public QObject {
             {"file", "test-session.onnx"},
             {"sha256", QString::fromLatin1(
                            QCryptographicHash::hash(bytes, QCryptographicHash::Sha256).toHex())}};
+        auto entries = gibbon::Models::manifest();
+        for (auto i = 0; i < entries.size(); ++i)
+            if (entries[i].toObject()["id"] == "quality")
+                entries.replace(i, entry);
         QFile manifest(dir.filePath("manifest.json"));
         QVERIFY(manifest.open(QIODevice::WriteOnly));
-        manifest.write(QJsonDocument(QJsonObject{{"models", QJsonArray{entry}}}).toJson());
+        manifest.write(QJsonDocument(QJsonObject{{"models", entries}}).toJson());
         manifest.close();
         qputenv("GIBBON_MODEL_DIR", dir.path().toUtf8());
         ImageStore images;
@@ -771,15 +775,13 @@ class ControllerTests : public QObject {
         QCOMPARE(c.result()["cropZoom"].toDouble(), 70.);
         window->setProperty("adjustmentsOpen", true);
         flickable->setProperty("contentY", 0);
-        c.setCropZoom(60);
+        c.setCropZoom(65);
         QTRY_VERIFY_WITH_TIMEOUT(!c.busy(), 15000);
-        c.set("headroom", .12);
+        c.set("headroom", .06);
         c.preview();
         QTRY_VERIFY_WITH_TIMEOUT(!c.busy(), 15000);
-        QCOMPARE(c.result()["cropZoom"].toDouble(), 60.);
-        c.set("background", "off");
-        c.preview();
-        QTRY_VERIFY_WITH_TIMEOUT(!c.busy(), 15000);
+        QCOMPARE(c.result()["cropZoom"].toDouble(), 65.);
+        QVERIFY2(!c.result()["review"].toBool(), qPrintable(c.result()["warnings"].toString()));
         if (!captures.isEmpty()) {
             QTest::qWait(100);
             QVERIFY(window->grabWindow().save(captures + "/sample-headroom-zoom.png"));
@@ -988,46 +990,47 @@ class ControllerTests : public QObject {
         QCOMPARE(c.items().size(), 1);
         QCOMPARE(c.result()["cropZoom"].toDouble(), 70.);
         const auto initial = c.result();
-        c.setCropZoom(60);
+        c.setCropZoom(65);
         QTRY_VERIFY_WITH_TIMEOUT(!c.busy(), 15000);
-        QCOMPARE(c.result()["cropZoom"].toDouble(), 60.);
+        QCOMPARE(c.result()["cropZoom"].toDouble(), 65.);
         QVERIFY(c.result()["cropW"].toDouble() > initial["cropW"].toDouble());
-        // The known sample head starts at y=180, even as zoom/headroom change.
+        // The detected head anchor stays fixed as zoom and headroom change.
+        const auto headY = initial["cropY"].toDouble() + .08 * initial["cropH"].toDouble();
         auto checkHeadroom = [&](double expected) {
             const auto r = c.result();
-            QVERIFY(qAbs((180. / 1600 - r["cropY"].toDouble()) / r["cropH"].toDouble() - expected) <
+            QVERIFY(qAbs((headY - r["cropY"].toDouble()) / r["cropH"].toDouble() - expected) <
                     .005);
         };
         checkHeadroom(.08);
         const auto zoomed = c.result();
-        c.set("headroom", .12);
+        c.set("headroom", .06);
         c.preview();
         QTRY_VERIFY_WITH_TIMEOUT(!c.busy(), 15000);
-        QCOMPARE(c.result()["cropZoom"].toDouble(), 60.);
-        checkHeadroom(.12);
+        QCOMPARE(c.result()["cropZoom"].toDouble(), 65.);
+        checkHeadroom(.06);
         QCOMPARE(c.result()["cropW"], zoomed["cropW"]);
         c.nudgeCrop(.01, 0);
         QTRY_VERIFY_WITH_TIMEOUT(!c.busy(), 15000);
-        QCOMPARE(c.result()["cropZoom"].toDouble(), 60.);
+        QCOMPARE(c.result()["cropZoom"].toDouble(), 65.);
         c.setCropZoom(80);
         QTRY_VERIFY_WITH_TIMEOUT(!c.busy(), 15000);
-        checkHeadroom(.12);
+        checkHeadroom(.06);
         c.undo();
         QTRY_VERIFY_WITH_TIMEOUT(!c.busy(), 15000);
-        QCOMPARE(c.result()["cropZoom"].toDouble(), 60.);
+        QCOMPARE(c.result()["cropZoom"].toDouble(), 65.);
         auto session = QUrl::fromLocalFile(dir.filePath("session.json"));
         c.saveSession(session);
         c.reset();
         QTRY_VERIFY_WITH_TIMEOUT(!c.busy(), 15000);
         c.loadSession(session);
         QTRY_VERIFY_WITH_TIMEOUT(!c.busy(), 15000);
-        QCOMPARE(c.result()["cropZoom"].toDouble(), 60.);
-        checkHeadroom(.12);
-        c.set("headroom", .1);
+        QCOMPARE(c.result()["cropZoom"].toDouble(), 65.);
+        checkHeadroom(.06);
+        c.set("headroom", .07);
         c.preview();
         QTRY_VERIFY_WITH_TIMEOUT(!c.busy(), 15000);
-        QCOMPARE(c.result()["cropZoom"].toDouble(), 60.);
-        checkHeadroom(.1);
+        QCOMPARE(c.result()["cropZoom"].toDouble(), 65.);
+        checkHeadroom(.07);
         c.setCropZoom(40);
         QTRY_VERIFY_WITH_TIMEOUT(!c.busy(), 15000);
         QCOMPARE(c.result()["cropZoom"].toDouble(), 40.);
@@ -1036,6 +1039,49 @@ class ControllerTests : public QObject {
         c.loadSample();
         QTRY_VERIFY_WITH_TIMEOUT(!c.busy(), 15000);
         QCOMPARE(c.items().size(), 1);
+    }
+    void sampleLoadPreservesCachedSources() {
+        const auto appName = QCoreApplication::applicationName();
+        QTemporaryDir isolation;
+        QVERIFY(isolation.isValid());
+        QCoreApplication::setApplicationName(QFileInfo(isolation.path()).fileName());
+        const auto restoreAppName = qScopeGuard([&] {
+            QCoreApplication::setApplicationName(appName);
+        });
+        const QDir cache(QStandardPaths::writableLocation(QStandardPaths::CacheLocation));
+        QVERIFY(!cache.exists());
+        QVERIFY(QDir().mkpath(cache.path()));
+        const auto legacy = cache.filePath("gibbon-sample.png");
+        const auto current = cache.filePath("gibbon-sample.jpg");
+        const auto cleanup = qScopeGuard([&] {
+            QFile::remove(legacy);
+            QFile::remove(current);
+            QDir().rmdir(cache.path());
+        });
+        QImage photo(360, 480, QImage::Format_RGB32);
+        photo.fill(Qt::gray);
+        QVERIFY(photo.save(legacy));
+        QVERIFY(photo.save(current));
+        const auto previous = Controller::sourceFingerprint(legacy);
+        const auto conflict = Controller::sourceFingerprint(current);
+        ImageStore images;
+        Controller c(&images, nullptr, {}, false);
+        c.add({QUrl::fromLocalFile(current)});
+        QTRY_VERIFY_WITH_TIMEOUT(!c.busy(), 15000);
+        c.loadSample();
+        QVERIFY(c.message().contains("cached sample"));
+        QCOMPARE(c.items().size(), 1);
+        QCOMPARE(Controller::sourceFingerprint(current), conflict);
+        c.reset();
+        QVERIFY(QFile::remove(current));
+        c.loadSample();
+        QTRY_VERIFY_WITH_TIMEOUT(!c.busy(), 15000);
+        QCOMPARE(c.items().size(), 1);
+        QCOMPARE(c.items().front().toMap()["path"].toString(), current);
+        QCOMPARE(Controller::sourceFingerprint(legacy), previous);
+        QVERIFY(Controller::sourceFingerprint(current) != conflict);
+        QCOMPARE(c.result()["width"].toInt(), 360);
+        QCOMPARE(c.result()["height"].toInt(), 480);
     }
     void editAndSession() {
         QTemporaryDir dir;

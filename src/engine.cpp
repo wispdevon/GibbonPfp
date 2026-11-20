@@ -7,7 +7,6 @@
 #include <QFileInfo>
 #include <QImageReader>
 #include <QImageWriter>
-#include <QPainter>
 #include <QSaveFile>
 #include <QTransform>
 #include <algorithm>
@@ -230,36 +229,6 @@ cv::Vec3f Engine::adjust(const cv::Vec3f &rgb, double amount) {
         result[c] = encoded(std::clamp(result[c], 0.f, 1.f));
     return result;
 }
-QByteArray Engine::samplePortrait() {
-    static const QByteArray png = [] {
-        QImage image(1200, 1600, QImage::Format_RGB32);
-        image.fill(QColor("#e9e5dc"));
-        QPainter painter(&image);
-        painter.setRenderHint(QPainter::Antialiasing);
-        painter.setPen(QPen(QColor("#315f86"), 64, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
-        painter.drawLine(600, 580, 600, 1110);
-        painter.drawLine(600, 710, 320, 940);
-        painter.drawLine(600, 710, 880, 940);
-        painter.drawLine(600, 1110, 405, 1430);
-        painter.drawLine(600, 1110, 795, 1430);
-        painter.setPen(QPen(QColor("#25282c"), 16));
-        painter.setBrush(QColor("#edc5a3"));
-        painter.drawEllipse(QRectF(420, 180, 360, 420));
-        painter.setPen(Qt::NoPen);
-        painter.setBrush(QColor("#25282c"));
-        painter.drawEllipse(QRectF(500, 340, 24, 30));
-        painter.drawEllipse(QRectF(676, 340, 24, 30));
-        painter.setPen(QPen(QColor("#25282c"), 14, Qt::SolidLine, Qt::RoundCap));
-        painter.drawArc(QRectF(520, 390, 160, 110), 190 * 16, 160 * 16);
-        painter.end();
-        QByteArray data;
-        QBuffer buffer(&data);
-        buffer.open(QIODevice::WriteOnly);
-        image.save(&buffer, "PNG");
-        return data;
-    }();
-    return png;
-}
 QRectF Engine::zoomCrop(QRectF basis, QPointF headAnchor, double percent, double headroom) {
     if (!std::isfinite(percent) || percent < 40 || percent > 100 || basis.isEmpty() ||
         !std::isfinite(headroom) || headroom < 0 || headroom > .25)
@@ -377,17 +346,8 @@ Result Engine::process(const QString &path, const Settings &s, std::atomic_bool 
     auto analysisImage = source.scaled(960, 960, Qt::KeepAspectRatio, Qt::SmoothTransformation);
     cv::Mat analysis = rgbMat(analysisImage);
     checkCancel(cancel);
-    // Only our exact generated PNG gets synthetic landmarks. Ordinary photos
-    // always use detection, even if renamed to the sample's filename.
-    QFile sampleFile(path);
-    const bool sample = s.rotation % 360 == 0 && sampleFile.size() == samplePortrait().size() &&
-                        sampleFile.open(QIODevice::ReadOnly) &&
-                        sampleFile.readAll() == samplePortrait();
     std::vector<cv::Rect> faces;
-    if (sample && s.autoCrop)
-        faces.emplace_back(450 * analysis.cols / 1200, 270 * analysis.rows / 1600,
-                           300 * analysis.cols / 1200, 300 * analysis.rows / 1600);
-    else if ((s.autoCrop && s.crop.isNull()) || !s.reference.isEmpty())
+    if ((s.autoCrop && s.crop.isNull()) || !s.reference.isEmpty())
         faces = models.faces(analysis, cancel, &trace);
     if (s.autoCrop && s.crop.isNull()) {
         if (faces.empty())
@@ -405,12 +365,10 @@ Result Engine::process(const QString &path, const Settings &s, std::atomic_bool 
         if (s.autoCrop && !faces.empty()) {
             auto f = faces.front();
             double top = f.y - .3 * f.height;
-            auto mask = sample ? cv::Mat() : models.mask(analysis, "fast", "head", cancel, &trace);
+            const auto mask = models.mask(analysis, "fast", "head", cancel, &trace);
             int from = std::max(0, int(f.y - .7 * f.height)), to = std::max(0, f.y);
-            bool found = sample;
-            if (sample)
-                top = 180. * analysis.rows / 1600;
-            for (int yy = from; yy < to && !sample; ++yy) {
+            bool found = false;
+            for (int yy = from; yy < to; ++yy) {
                 int count = 0;
                 for (int xx = std::max(0, f.x); xx < std::min(mask.cols, f.x + f.width); ++xx)
                     if (mask.at<float>(yy, xx) > .65)

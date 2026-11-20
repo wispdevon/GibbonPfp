@@ -38,7 +38,7 @@ class Engine {
     static cv::Mat cropMask(const cv::Mat &mask, QRect context, QRect crop, QSize outputSize);
     static cv::Mat sharpenForScreen(const cv::Mat &rgb, const cv::Mat &alpha, const QString &level,
                                     std::atomic_bool *cancel = nullptr);
-    static QByteArray samplePortrait();
+    static constexpr auto samplePortraitResource = ":/assets/gibbon-sample.jpg";
     static QImage decode(const QString &path, const Settings &settings);
     static QSize outputSize(QSize crop, const Settings &settings);
     static double tone(double lightness, double amount);

@@ -371,21 +371,30 @@ class CoreTests : public QObject {
     }
     void contextPreservesExport() {
         QTemporaryDir dir;
-        QFile sample(dir.filePath("sample.png"));
-        QVERIFY(sample.open(QIODevice::WriteOnly));
-        QVERIFY(sample.write(Engine::samplePortrait()) > 0);
-        sample.close();
+        const auto sample = dir.filePath("sample.jpg");
+        QVERIFY(QFile::copy(Engine::samplePortraitResource, sample));
         Settings s;
         s.cropZoom = 65;
-        s.headroom = .12;
+        s.headroom = .06;
         s.format = "png";
+        s.background = "off";
         s.sharpenScreen = false;
         Engine engine;
-        const auto original = engine.process(sample.fileName(), s);
+        engine.setDevice("cpu");
+        const auto original = engine.process(sample, s);
+        QVERIFY2(original.warnings.isEmpty(), qPrintable(original.warnings.join("; ")));
+        QCOMPARE(original.outputSize, QSize(360, 480));
+        for (const auto &detail : {"face", "head · fast"})
+            QVERIFY(std::any_of(original.timings.cbegin(), original.timings.cend(),
+                                [detail](const auto &timing) {
+                                    return timing.stage == "Inference" && timing.detail == detail;
+                                }));
         s.background = "fast";
-        const auto removed = engine.process(sample.fileName(), s);
+        const auto removed = engine.process(sample, s);
         QCOMPARE(removed.crop, original.crop);
         QCOMPARE(removed.outputSize, original.outputSize);
+        QVERIFY(removed.mask.pixelColor(0, 0).red() < 10);
+        QVERIFY(removed.mask.pixelColor(180, 200).red() > 245);
         QCOMPARE(removed.preview.convertToFormat(QImage::Format_RGB888),
                  original.preview.convertToFormat(QImage::Format_RGB888));
     }
