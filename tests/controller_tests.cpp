@@ -6,6 +6,7 @@
 #include <QJsonDocument>
 #include <QQmlApplicationEngine>
 #include <QQmlContext>
+#include <QPainter>
 #include <QQuickItem>
 #include <QQuickStyle>
 #include <QQuickWindow>
@@ -764,9 +765,18 @@ class ControllerTests : public QObject {
         c.preview();
         QTRY_VERIFY_WITH_TIMEOUT(!c.busy(), 15000);
         QCOMPARE(c.result()["cropZoom"].toDouble(), 60.);
-        QTest::qWait(100);
-        if (!captures.isEmpty())
+        c.set("background", "off");
+        c.preview();
+        QTRY_VERIFY_WITH_TIMEOUT(!c.busy(), 15000);
+        if (!captures.isEmpty()) {
+            QTest::qWait(100);
             QVERIFY(window->grabWindow().save(captures + "/sample-headroom-zoom.png"));
+        }
+        QTemporaryDir sampleExport;
+        QVERIFY(sampleExport.isValid());
+        c.exportCurrent(QUrl::fromLocalFile(sampleExport.path()));
+        QTRY_VERIFY_WITH_TIMEOUT(!c.busy(), 15000);
+        QCOMPARE(QImage(sampleExport.filePath("gibbon-sample-pfp.jpg")).size(), QSize(360, 480));
         c.set("background", "quality");
         c.preview();
         QVERIFY(c.qualityConfirmationPending());
@@ -857,6 +867,102 @@ class ControllerTests : public QObject {
         QTRY_VERIFY(!dialog->property("visible").toBool());
         QTRY_VERIFY_WITH_TIMEOUT(!c.busy(), 15000);
         QVERIFY(c.settings()["crop"] != crop);
+    }
+
+    void emptyWorkspaceAndFilteredReview() {
+        QTemporaryDir dir;
+        QImage photo(240, 320, QImage::Format_RGB32);
+        photo.fill(QColor("#d7dfe0"));
+        {
+            QPainter painter(&photo);
+            painter.setRenderHint(QPainter::Antialiasing);
+            painter.setPen(Qt::NoPen);
+            painter.setBrush(QColor("#2c4760"));
+            painter.drawRoundedRect(QRect(-25, 249, 290, 170), 60, 60);
+            painter.setBrush(QColor("#7f563f"));
+            painter.drawRoundedRect(QRect(102, 205, 58, 75), 24, 24);
+            painter.setBrush(QColor("#4e372c"));
+            painter.drawEllipse(QRect(64, 74, 130, 157));
+        }
+        const auto path = dir.filePath("review-portrait.png");
+        QVERIFY(photo.save(path));
+
+        QQmlApplicationEngine qml;
+        auto *images = new ImageStore;
+        qml.addImageProvider("photos", images);
+        Controller c(images, nullptr, {}, false);
+        c.setUiScale(100);
+        qml.rootContext()->setContextProperty("backend", &c);
+        qml.load(QUrl::fromLocalFile(GIBBON_SOURCE_DIR "/qml/Main.qml"));
+        QVERIFY(!qml.rootObjects().isEmpty());
+        auto *window = qobject_cast<QQuickWindow *>(qml.rootObjects().front());
+        QVERIFY(window);
+        QScopeGuard deleteWindow([&] { qDeleteAll(qml.rootObjects()); });
+
+        const auto *open = window->findChild<QQuickItem *>("emptyOpenPhotos");
+        const auto *sample = window->findChild<QQuickItem *>("emptyLoadSample");
+        const auto *headerSample = window->findChild<QQuickItem *>("loadSample");
+        QVERIFY(open && sample && headerSample);
+        const auto captures = qEnvironmentVariable("GIBBON_TEST_SCREENSHOTS");
+        const QList<QSize> sizes = {{1024, 720}, {1440, 900}};
+        auto capture = [&](const QString &name, const QSize &size) {
+            if (captures.isEmpty())
+                return;
+            QDir().mkpath(captures);
+            QTest::qWait(100);
+            const auto file = QString("%1/%2-%3x%4.png").arg(captures, name).arg(size.width()).arg(size.height());
+            QVERIFY(window->grabWindow().save(file));
+        };
+        for (const auto &size : sizes) {
+            window->resize(size);
+            window->setProperty("adjustmentsOpen", true);
+            window->setProperty("queueOpen", size.width() >= 1100);
+            QVERIFY(open->isVisible() && open->isEnabled());
+            QVERIFY(sample->isVisible() && sample->isEnabled());
+            QVERIFY(!headerSample->isVisible());
+            capture("empty-workspace", size);
+        }
+        QTest::mouseClick(window, Qt::LeftButton, Qt::NoModifier,
+                          sample->mapToScene(QPointF(sample->width() / 2, sample->height() / 2)).toPoint());
+        QTRY_VERIFY_WITH_TIMEOUT(!c.busy(), 15000);
+        QCOMPARE(c.items().size(), 1);
+        QVERIFY(!open->isVisible() && !sample->isVisible());
+        QVERIFY(headerSample->isVisible());
+        c.add({QUrl::fromLocalFile(path)});
+        QTRY_VERIFY_WITH_TIMEOUT(!c.busy(), 15000);
+        c.setCurrent(1);
+        QTRY_VERIFY_WITH_TIMEOUT(!c.busy(), 15000);
+        c.set("background", "off");
+        c.preview();
+        QTRY_VERIFY_WITH_TIMEOUT(!c.busy(), 15000);
+        QVERIFY(c.result()["review"].toBool());
+
+        window->setProperty("adjustmentsOpen", false);
+        window->setProperty("queueOpen", true);
+        auto *filter = window->findChild<QQuickItem *>("queueFilter");
+        QVERIFY(filter);
+        filter->setProperty("currentIndex", 1);
+        QVERIFY(QMetaObject::invokeMethod(filter, "activated", Q_ARG(int, 1)));
+        auto *hidden = window->findChild<QQuickItem *>("queueHiddenSelectionCount");
+        const auto *reason = window->findChild<QQuickItem *>("reviewReason");
+        const auto *approve = window->findChild<QQuickItem *>("approveFraming");
+        QVERIFY(hidden && hidden->isVisible());
+        QVERIFY(hidden->property("text").toString().contains("1 selected"));
+        QVERIFY(reason && reason->property("text").toString().contains(c.result()["warnings"].toString()));
+        QVERIFY(approve && approve->isVisible());
+        QCOMPARE(c.selectedCount(), 2);
+        for (const auto &size : sizes) {
+            window->resize(size);
+            window->setProperty("adjustmentsOpen", size.width() >= 1100);
+            window->setProperty("queueOpen", true);
+            capture("filtered-review", size);
+        }
+        QTest::mouseClick(window, Qt::LeftButton, Qt::NoModifier,
+                          approve->mapToScene(QPointF(approve->width() / 2, approve->height() / 2)).toPoint());
+        QTRY_VERIFY(!c.result()["review"].toBool());
+        QVERIFY(c.queue[1].settings.approved);
+        QVERIFY(!c.queue[0].settings.approved);
+        QVERIFY(hidden->property("text").toString().contains("2 selected"));
     }
 
     void cropZoomState() {
