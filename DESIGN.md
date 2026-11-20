@@ -31,7 +31,7 @@ workspace commands in a menu and reserve the bottom bar for status and export.
 Queue → Preview / Crop → Result → adjustments follows the work sequence.
 The two image panes start at equal widths, with a draggable divider. Queue and
 adjustments collapse independently and initially hide when logical space is limited.
-Narrow workspaces show at most one sidebar. Give **01 Frame** and **02 Refine**
+Narrow workspaces show at most one sidebar. Give **Frame** and **Refine**
 separate tabs in the inspector. Open Frame initially and keep the chosen tab
 when moving between photos. Place encoding and sizing in **Export as…**.
 Dense regions scroll independently. Minimum window size is 1024 × 720.
@@ -142,9 +142,11 @@ Folder exports write each successful photo as it completes and report holds or
 failures. Completed output stays on disk after cancellation.
 
 **Export as…** brings scope, output settings, and destination into one decision.
-Offer the current photo, checked photos, or the whole queue as a ZIP. Keep
-framing, brushes, and review policy specific to each photo. Cancel discards
-unfinished export choices.
+Offer the current photo, checked photos, or the whole queue as a ZIP. On first
+use, select the checked set when it contains multiple photos, using each
+photo’s own output settings. The user can choose one shared output style for
+the batch. Keep framing, brushes, and review policy specific to each photo.
+Cancel discards unfinished export choices.
 
 **Quick Export** uses the last successful export settings and destination. Use
 the current photo's profile settings for the first export or the output settings
