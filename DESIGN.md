@@ -10,7 +10,8 @@ dimensions and numeric zoom readouts. Fonts are bundled under the SIL Open Font 
 Use Medium (500) for work text and controls, DemiBold (600) for actions, and Bold
 (700) for headings. Explicitly apply these fonts to dropdown delegates, menus,
 fields, checkboxes, tooltips, and app dialogs. Validate bundled font loading at
-startup. Native operating-system file dialogs retain their platform typography.
+startup. File dialogs retain the typography supplied by their dialog backend.
+On Linux, default to Qt's built-in theme for reliable desktop startup.
 
 Use the shared palette, dot grid, and control geometry. Use `#d3cec5` for light
 separators and `#414447` for dark separators. Keep status labels legible at the

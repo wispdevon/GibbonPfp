@@ -78,11 +78,11 @@ int main(int argc, char **argv) {
     if (cli)
         qputenv("QT_COMMAND_LINE_PARSER_NO_GUI_MESSAGE_BOXES", "1");
 #endif
-    // Keep the workspace theme in QML, while native dialogs use the desktop
-    // portal (and its configured FileChooser backend, e.g. GTK).
 #ifdef Q_OS_LINUX
+    // The portal theme can initialize the host GTK plugin before QML starts.
+    // Use Qt's built-in theme by default and let -platformtheme opt in.
     if (!cli)
-        qputenv("QT_QPA_PLATFORMTHEME", "xdgdesktopportal");
+        qputenv("QT_QPA_PLATFORMTHEME", "generic");
 #endif
     std::unique_ptr<QCoreApplication> application;
     if (cli)

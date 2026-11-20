@@ -226,11 +226,10 @@ theme initially follows the OS. Preferences apply immediately and persist locall
 Inter Medium is used for work text and Qt dropdown entries, DemiBold for actions,
 Space Grotesk Bold for headings, and Geist Mono for dimensions and zoom readouts.
 Fonts are embedded and checked at startup. UI scaling includes controls, spacing,
-panels, and app popups, on top of Qt display scaling. Native OS file dialogs retain
-their system typography and scaling. On Linux, import, export-folder, and session
-dialogs use the XDG desktop portal. To select GTK, install `xdg-desktop-portal-gtk`
-and set `org.freedesktop.impl.portal.FileChooser=gtk` in the `[preferred]` section
-of `~/.config/xdg-desktop-portal/portals.conf`. Export dimensions do not change.
+panels, and app popups, on top of Qt display scaling. File dialogs use their own
+typography and scaling. On Linux, HeadshotFlow defaults to Qt's built-in dialogs.
+On systems with a working portal theme, launch `gibbonpfp -platformtheme xdgdesktopportal`
+to use the system's configured file chooser. Export dimensions do not change.
 
 **Queue** and **Adjustments** toggle sidebars; narrow workspaces show one at a time.
 Adjustments scroll independently. **Workspace** contains sessions and model management.

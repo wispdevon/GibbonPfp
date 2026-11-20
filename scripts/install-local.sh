@@ -30,5 +30,9 @@ if command -v update-desktop-database >/dev/null; then
 fi
 GIBBON_DISABLE_SOURCE_MODELS=1 QT_QPA_PLATFORM=offscreen QT_QUICK_BACKEND=software \
     "$install_prefix/bin/gibbonpfp" --smoke-test
+# Display-backed Qt platform themes initialize differently from the offscreen plugin.
+if [[ -n ${WAYLAND_DISPLAY:-} || -n ${DISPLAY:-} ]]; then
+    GIBBON_DISABLE_SOURCE_MODELS=1 "$install_prefix/bin/gibbonpfp" --smoke-test
+fi
 GIBBON_DISABLE_SOURCE_MODELS=1 python3 "$project_dir/scripts/test_cli.py" "$install_prefix/bin/gibbonpfp"
 printf 'Installed current workspace: %s/bin/gibbonpfp\n' "$install_prefix"
