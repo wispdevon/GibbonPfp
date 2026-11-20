@@ -6,6 +6,9 @@ photos and generated reports remain outside Git. Generated masks and composites
 are adaptations with the corresponding source license. Keep ATTRIBUTIONS.md with
 shared output. No photos are used as model training data by this runner.
 
+The [CPU matting review](cpu-matting-review.md) compares alternative models and
+input sizes with the bundled Fast model.
+
 ## Visual review, 2026-09-16
 
 Fast, automatic CUDA on the local Linux/NVIDIA system, fixed 65% crop request,
