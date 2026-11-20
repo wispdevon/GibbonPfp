@@ -1011,6 +1011,19 @@ class ControllerTests : public QObject {
         QTRY_VERIFY(qAbs(queue->width() - 224) < 1.);
         QTRY_VERIFY(qAbs(inspector->width() - 270) < 1.);
         QTRY_VERIFY(qAbs(crop->width() - result->width()) < 1.);
+        auto *firstTabStop = window->findChild<QQuickItem *>("addPhotos");
+        QVERIFY(firstTabStop);
+        firstTabStop->forceActiveFocus(Qt::TabFocusReason);
+        QSet<QString> reachedDividers;
+        for (int step = 0; step < 100 && reachedDividers.size() < 3; ++step) {
+            QTest::keyClick(window, Qt::Key_Tab);
+            const auto *focused = window->activeFocusItem();
+            if (focused == firstTabStop)
+                break;
+            if (focused && focused->objectName().endsWith("Divider"))
+                reachedDividers.insert(focused->objectName());
+        }
+        QCOMPARE(reachedDividers, QSet<QString>({"queueDivider", "photoDivider", "inspectorDivider"}));
         dragTo("queueDivider", window->width()-2);
         QTRY_VERIFY(qAbs(queue->width() - 380) < 1.);
         dragTo("queueDivider", 2);
