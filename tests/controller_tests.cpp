@@ -115,12 +115,12 @@ class ControllerTests : public QObject {
         c.loadSample();
         QTRY_VERIFY_WITH_TIMEOUT(!c.busy(), 15000);
         QCOMPARE(c.current(), 1);
-        c.select(0, false);
-        c.select(1, false);
+        for (int row = 0; row < c.items().size(); ++row)
+            c.select(row, false);
         const auto revision = c.revision();
         c.removeSelected();
         QCOMPARE(c.current(), 1);
-        QCOMPARE(c.items().size(), 2);
+        QCOMPARE(c.items().size(), 4);
         QCOMPARE(c.revision(), revision);
         QVERIFY(!c.busy());
         c.batch(QUrl::fromLocalFile(dir.path()), true);
@@ -308,6 +308,7 @@ class ControllerTests : public QObject {
         QCOMPARE(c.items().size(), 0);
         c.resolveRecovery(true);
         QCOMPARE(c.recoveryJson(), saved);
+        QCOMPARE(c.items().size(), 3);
         QVERIFY(c.result().isEmpty());
         QVERIFY(!c.highQualityLoaded());
         c.preview();
@@ -786,7 +787,7 @@ class ControllerTests : public QObject {
                 .toPoint();
         QTest::mouseClick(window, Qt::LeftButton, Qt::NoModifier, samplePoint);
         QTRY_VERIFY_WITH_TIMEOUT(!c.busy(), 15000);
-        QCOMPARE(c.items().size(), 2);
+        QCOMPARE(c.items().size(), 4);
         QCOMPARE(c.result()["cropZoom"].toDouble(), 70.);
         window->setProperty("adjustmentsOpen", true);
         flickable->setProperty("contentY", 0);
@@ -850,9 +851,10 @@ class ControllerTests : public QObject {
         QTRY_VERIFY_WITH_TIMEOUT(!c.busy(), 15000);
         const auto *count = window->findChild<QQuickItem *>("queueSelectionCount");
         QVERIFY(count);
-        QVERIFY(count->property("text").toString().contains("1 of 1"));
-        c.select(0, false);
-        QVERIFY(count->property("text").toString().contains("0 of 1"));
+        QVERIFY(count->property("text").toString().contains("3 of 3"));
+        for (int row = 0; row < c.items().size(); ++row)
+            c.select(row, false);
+        QVERIFY(count->property("text").toString().contains("0 of 3"));
         for (const auto *name : {"prepareSelected", "removeSelected", "exportSelected"}) {
             const auto *action = window->findChild<QQuickItem *>(name);
             QVERIFY(action);
@@ -944,12 +946,13 @@ class ControllerTests : public QObject {
         QTest::mouseClick(window, Qt::LeftButton, Qt::NoModifier,
                           sample->mapToScene(QPointF(sample->width() / 2, sample->height() / 2)).toPoint());
         QTRY_VERIFY_WITH_TIMEOUT(!c.busy(), 15000);
-        QCOMPARE(c.items().size(), 1);
+        QCOMPARE(c.items().size(), 3);
         QVERIFY(!open->isVisible() && !sample->isVisible());
         QVERIFY(headerSample->isVisible());
+        capture("sample-batch", sizes.back());
         c.add({QUrl::fromLocalFile(path)});
         QTRY_VERIFY_WITH_TIMEOUT(!c.busy(), 15000);
-        c.setCurrent(1);
+        c.setCurrent(3);
         QTRY_VERIFY_WITH_TIMEOUT(!c.busy(), 15000);
         c.set("background", "off");
         c.preview();
@@ -966,10 +969,10 @@ class ControllerTests : public QObject {
         const auto *reason = window->findChild<QQuickItem *>("reviewReason");
         const auto *approve = window->findChild<QQuickItem *>("approveFraming");
         QVERIFY(hidden && hidden->isVisible());
-        QVERIFY(hidden->property("text").toString().contains("1 selected"));
+        QVERIFY(hidden->property("text").toString().contains("3 selected"));
         QVERIFY(reason && reason->property("text").toString().contains(c.result()["warnings"].toString()));
         QVERIFY(approve && approve->isVisible());
-        QCOMPARE(c.selectedCount(), 2);
+        QCOMPARE(c.selectedCount(), 4);
         for (const auto &size : sizes) {
             window->resize(size);
             QTest::qWait(100);
@@ -981,9 +984,9 @@ class ControllerTests : public QObject {
         QTest::mouseClick(window, Qt::LeftButton, Qt::NoModifier,
                           approve->mapToScene(QPointF(approve->width() / 2, approve->height() / 2)).toPoint());
         QTRY_VERIFY(!c.result()["review"].toBool());
-        QVERIFY(c.queue[1].settings.approved);
+        QVERIFY(c.queue[3].settings.approved);
         QVERIFY(!c.queue[0].settings.approved);
-        QVERIFY(hidden->property("text").toString().contains("2 selected"));
+        QVERIFY(hidden->property("text").toString().contains("4 selected"));
     }
 
     void queueNavigationRespectsFiltersAndSelection() {
@@ -1097,7 +1100,7 @@ class ControllerTests : public QObject {
         Controller c(&images);
         c.loadSample();
         QTRY_VERIFY_WITH_TIMEOUT(!c.busy(), 15000);
-        QCOMPARE(c.items().size(), 1);
+        QCOMPARE(c.items().size(), 3);
         QCOMPARE(c.result()["cropZoom"].toDouble(), 70.);
         const auto initial = c.result();
         c.setCropZoom(65);
@@ -1148,7 +1151,8 @@ class ControllerTests : public QObject {
         QVERIFY(c.result()["cropY"].toDouble() >= 0);
         c.loadSample();
         QTRY_VERIFY_WITH_TIMEOUT(!c.busy(), 15000);
-        QCOMPARE(c.items().size(), 1);
+        QCOMPARE(c.items().size(), 3);
+        QCOMPARE(c.result()["cropZoom"].toDouble(), 40.);
     }
     void sampleLoadPreservesCachedSources() {
         const auto appName = QCoreApplication::applicationName();
@@ -1162,36 +1166,90 @@ class ControllerTests : public QObject {
         QVERIFY(!cache.exists());
         QVERIFY(QDir().mkpath(cache.path()));
         const auto legacy = cache.filePath("gibbon-sample.png");
-        const auto current = cache.filePath("gibbon-sample.jpg");
+        const auto first = cache.filePath("gibbon-sample.jpg");
+        const auto second = cache.filePath("gibbon-sample-2.jpg");
+        const auto third = cache.filePath("gibbon-sample-3.jpg");
         const auto cleanup = qScopeGuard([&] {
             QFile::remove(legacy);
-            QFile::remove(current);
+            QFile::remove(first);
+            QFile::remove(second);
+            QFile::remove(third);
             QDir().rmdir(cache.path());
         });
         QImage photo(360, 480, QImage::Format_RGB32);
         photo.fill(Qt::gray);
         QVERIFY(photo.save(legacy));
-        QVERIFY(photo.save(current));
+        QVERIFY(photo.save(third));
         const auto previous = Controller::sourceFingerprint(legacy);
-        const auto conflict = Controller::sourceFingerprint(current);
+        const auto conflict = Controller::sourceFingerprint(third);
         ImageStore images;
         Controller c(&images, nullptr, {}, false);
-        c.add({QUrl::fromLocalFile(current)});
+        c.add({QUrl::fromLocalFile(third)});
         QTRY_VERIFY_WITH_TIMEOUT(!c.busy(), 15000);
+        c.set("brightness", .19);
+        c.select(0, false);
         c.loadSample();
         QVERIFY(c.message().contains("cached sample"));
         QCOMPARE(c.items().size(), 1);
-        QCOMPARE(Controller::sourceFingerprint(current), conflict);
-        c.reset();
-        QVERIFY(QFile::remove(current));
+        QCOMPARE(c.settings()["brightness"].toDouble(), .19);
+        QCOMPARE(c.selectedCount(), 0);
+        QCOMPARE(Controller::sourceFingerprint(third), conflict);
+        QVERIFY(!QFile::exists(first));
+        QVERIFY(!QFile::exists(second));
+        QVERIFY(QFile::remove(third));
+        c.loadSample();
+        QCOMPARE(c.items().size(), 1);
+        QVERIFY(!QFile::exists(third));
+        c.select(0, true);
+        c.removeSelected();
+        c.add({QUrl::fromLocalFile(legacy)});
+        QTRY_VERIFY_WITH_TIMEOUT(!c.busy(), 15000);
+        c.set("brightness", .19);
+        c.select(0, false);
         c.loadSample();
         QTRY_VERIFY_WITH_TIMEOUT(!c.busy(), 15000);
-        QCOMPARE(c.items().size(), 1);
-        QCOMPARE(c.items().front().toMap()["path"].toString(), current);
+        QCOMPARE(c.items().size(), 4);
+        QCOMPARE(c.current(), 1);
+        QCOMPARE(c.queue[0].path, legacy);
+        QCOMPARE(c.queue[1].path, first);
+        QCOMPARE(c.queue[2].path, second);
+        QCOMPARE(c.queue[3].path, third);
+        QCOMPARE(c.queue[0].settings.brightness, .19);
+        QVERIFY(!c.queue[0].selected);
         QCOMPARE(Controller::sourceFingerprint(legacy), previous);
-        QVERIFY(Controller::sourceFingerprint(current) != conflict);
+        QVERIFY(Controller::sourceFingerprint(third) != conflict);
         QCOMPARE(c.result()["width"].toInt(), 360);
         QCOMPARE(c.result()["height"].toInt(), 480);
+
+        auto thumbnail = [&](int row) {
+            const QUrl url(c.items()[row].toMap()["thumb"].toString());
+            return images.requestImage(url.path().mid(1), nullptr, {});
+        };
+        for (int row : {2, 3}) {
+            QCOMPARE(c.queue[row].state, "Imported");
+            QCOMPARE(thumbnail(row).size(), QSize(96, 128));
+            QCOMPARE(thumbnail(row).pixelColor(48, 64).alpha(), 255);
+        }
+        QVERIFY(thumbnail(2) != thumbnail(3));
+        c.set("brightness", .27);
+        c.select(1, false);
+        c.select(3, false);
+        c.removeSelected();
+        QTRY_VERIFY_WITH_TIMEOUT(!c.busy(), 15000);
+        QCOMPARE(c.items().size(), 3);
+        c.setCurrent(1);
+        QTRY_VERIFY_WITH_TIMEOUT(!c.busy(), 15000);
+        c.loadSample();
+        QCOMPARE(c.items().size(), 4);
+        QCOMPARE(c.current(), 1);
+        QCOMPARE(c.selectedCount(), 1);
+        QCOMPARE(c.queue[3].path, second);
+        QCOMPARE(c.settings()["brightness"].toDouble(), .27);
+        const auto revision = c.revision();
+        c.loadSample();
+        QCOMPARE(c.items().size(), 4);
+        QCOMPARE(c.revision(), revision);
+        QVERIFY(!c.busy());
     }
     void editAndSession() {
         QTemporaryDir dir;

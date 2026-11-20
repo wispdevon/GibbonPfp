@@ -372,7 +372,7 @@ class CoreTests : public QObject {
     void contextPreservesExport() {
         QTemporaryDir dir;
         const auto sample = dir.filePath("sample.jpg");
-        QVERIFY(QFile::copy(Engine::samplePortraitResource, sample));
+        QVERIFY(QFile::copy(Engine::samplePortraitResources.front(), sample));
         Settings s;
         s.cropZoom = 65;
         s.headroom = .06;
@@ -397,6 +397,24 @@ class CoreTests : public QObject {
         QVERIFY(removed.mask.pixelColor(180, 200).red() > 245);
         QCOMPARE(removed.preview.convertToFormat(QImage::Format_RGB888),
                  original.preview.convertToFormat(QImage::Format_RGB888));
+    }
+    void bundledPortraitsUseDefaultPipeline() {
+        QTemporaryDir dir;
+        QVERIFY(dir.isValid());
+        Engine engine;
+        engine.setDevice("cpu");
+        for (const auto *resource : Engine::samplePortraitResources) {
+            const auto path = dir.filePath(QFileInfo(resource).fileName());
+            QVERIFY(QFile::copy(resource, path));
+            const Settings settings;
+            const auto result = engine.process(path, settings);
+            QVERIFY2(!result.review, qPrintable(path + " " + result.warnings.join(", ")));
+            QCOMPARE(result.outputSize, QSize(360, 480));
+            const auto output = Engine::save(result, path, dir.path(), settings);
+            QCOMPARE(QImage(output).size(), QSize(360, 480));
+            QVERIFY(result.mask.pixelColor(0, 0).red() < 10);
+            QVERIFY(result.mask.pixelColor(180, 200).red() > 245);
+        }
     }
     void lightweightMaskRefinement() {
         cv::Mat guide(480, 360, CV_32FC3, cv::Scalar(.8, .8, .8));

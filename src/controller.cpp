@@ -7,6 +7,7 @@
 #include <QFileInfo>
 #include <QFutureWatcher>
 #include <QGuiApplication>
+#include <QImageReader>
 #include <QJsonDocument>
 #include <QSaveFile>
 #include <QSettings>
@@ -193,33 +194,78 @@ void Controller::add(const QList<QUrl> &urls, bool recursive) {
         preview();
 }
 void Controller::loadSample() {
-    if (working)
+    if (working || recoveryOffered)
         return;
-    const auto directory = QStandardPaths::writableLocation(QStandardPaths::CacheLocation);
-    if (!QDir().mkpath(directory)) {
+    const auto cachePath = QStandardPaths::writableLocation(QStandardPaths::CacheLocation);
+    if (cachePath.isEmpty() || !QDir().mkpath(cachePath)) {
         fail("Could not create the sample image directory");
         return;
     }
-    // Preserve the previous sample path for saved sessions. QFile::copy also
-    // leaves any existing file at the new path untouched.
-    const QString resource = Engine::samplePortraitResource;
-    const auto path = QDir(directory).filePath(QFileInfo(resource).fileName());
-    const auto fingerprint = sourceFingerprint(resource);
-    if (!QFileInfo::exists(path))
-        QFile::copy(resource, path);
-    if (fingerprint.isEmpty() || sourceFingerprint(path) != fingerprint) {
-        fail("Could not create or verify the cached sample image");
-        return;
-    }
-    for (int i = 0; i < queue.size(); ++i)
-        if (queue[i].path == path) {
-            setCurrent(i);
+    const QDir directory(cachePath);
+    struct Sample {
+        Item photo;
+        QString resource;
+        int row = -1;
+        bool cached = false;
+    };
+    QList<Sample> samples;
+    const auto cacheError = [this](const QFileInfo &file) {
+        fail(QString("Could not create or verify the cached sample image %1").arg(file.fileName()));
+    };
+    // Check all sources before changing the cache or queue. Keep the existing
+    // filenames so old sessions resolve to the same originals.
+    for (const auto *resource : Engine::samplePortraitResources) {
+        const QFileInfo file(directory.filePath(QFileInfo(resource).fileName()));
+        Sample sample;
+        sample.resource = resource;
+        sample.photo.path = file.filePath();
+        sample.photo.fingerprint = sourceFingerprint(sample.resource);
+        sample.photo.settings = importDefaults;
+        sample.cached = file.exists() || file.isSymLink();
+        const auto existing = std::find_if(queue.cbegin(), queue.cend(), [&](const Item &item) {
+            return item.path == sample.photo.path;
+        });
+        if (sample.photo.fingerprint.isEmpty() ||
+            (sample.cached &&
+             (!file.isFile() || sourceFingerprint(sample.photo.path) != sample.photo.fingerprint)) ||
+            (existing != queue.cend() && !existing->fingerprint.isEmpty() &&
+             existing->fingerprint != sample.photo.fingerprint)) {
+            cacheError(file);
             return;
         }
-    const int row = queue.size();
-    Item sample; sample.settings = importDefaults; sample.path = path; sample.fingerprint = fingerprint;
-    queue.push_back(sample);
-    setCurrent(row);
+        if (existing != queue.cend())
+            sample.row = int(existing - queue.cbegin());
+        samples.append(std::move(sample));
+    }
+    for (const auto &sample : samples) {
+        if (sample.cached)
+            continue;
+        // QFile::copy protects a destination created by another instance.
+        QFile::copy(sample.resource, sample.photo.path);
+        const QFileInfo file(sample.photo.path);
+        if (!file.isFile() || sourceFingerprint(sample.photo.path) != sample.photo.fingerprint) {
+            cacheError(file);
+            return;
+        }
+    }
+    bool appended = false;
+    for (auto &sample : samples) {
+        if (sample.row >= 0)
+            continue;
+        QImageReader thumbnail(sample.resource);
+        thumbnail.setScaledSize(QSize(96, 128));
+        images->put(thumbnailKey(sample.photo.path), thumbnail.read());
+        sample.row = int(queue.size());
+        queue.append(std::move(sample.photo));
+        appended = true;
+    }
+    const int firstRow = samples.front().row;
+    if (index != firstRow)
+        setCurrent(firstRow);
+    else if (details.isEmpty())
+        preview();
+    else if (appended)
+        emit changed();
 }
 void Controller::remember() {
     if (index >= 0) {
