@@ -33,9 +33,35 @@ ApplicationWindow {
     readonly property bool hasPhoto: backend.current >= 0
     readonly property bool hasSelection: backend.selectedCount > 0
     readonly property var queuePhotos: backend.items
+    readonly property var visibleQueuePhotos: queuePhotos.filter(photo => matchesQueueFilter(photo.state))
+    readonly property int visiblePhotoPosition: visibleQueuePhotos.findIndex(photo => photo.row === backend.current)
     readonly property int hiddenSelectedCount: queuePhotos.filter(photo => photo.selected && !matchesQueueFilter(photo.state)).length
+    readonly property bool canNavigate: hasPhoto && !backend.busy && !backend.qualityConfirmationPending
+                                        && !applyAllDialog.visible && !sizeDialog.visible
+    readonly property int previousPhotoRow: adjacentVisiblePhoto(-1)
+    readonly property int nextPhotoRow: adjacentVisiblePhoto(1)
+    readonly property int nextReviewPhotoRow: findNextReviewPhoto()
     function matchesQueueFilter(state: string): bool {
         return filter === "All photos" || state === filter
+    }
+    function adjacentVisiblePhoto(direction: int): int {
+        for (let row = backend.current + direction; row >= 0 && row < queuePhotos.length; row += direction) {
+            if (matchesQueueFilter(queuePhotos[row].state))
+                return row
+        }
+        return -1
+    }
+    function findNextReviewPhoto(): int {
+        for (let offset = 1; offset < queuePhotos.length; ++offset) {
+            const row = (backend.current + offset) % queuePhotos.length
+            if (queuePhotos[row].state === "Needs review")
+                return row
+        }
+        return -1
+    }
+    function openImportFolder() {
+        folderAction = "import"
+        folders.open()
     }
     palette.window: panel
     palette.windowText: ink
@@ -172,8 +198,8 @@ ApplicationWindow {
             Item { Layout.fillWidth: true }
             Action { text: queueOpen ? "Hide queue" : "Queue"; onClicked: {queueOpen=!queueOpen;if(queueOpen&&workspace.width<1100)adjustmentsOpen=false} }
             Action { text: adjustmentsOpen ? "Hide adjustments" : "Adjustments"; onClicked: {adjustmentsOpen=!adjustmentsOpen;if(adjustmentsOpen&&workspace.width<1100)queueOpen=false} }
-            Action { text: "+ Add photos"; primary: hasPhoto; enabled: !backend.busy; onClicked: photos.open() }
-            Action { text: "Add folder"; enabled: !backend.busy; onClicked: {folderAction="import";folders.open()} }
+            Action { text: "Add photos…"; primary: hasPhoto; enabled: !backend.busy; onClicked: photos.open() }
+            Action { text: "Add folder…"; enabled: !backend.busy; onClicked: openImportFolder() }
         }
         RowLayout {
             Layout.fillWidth: true; Layout.fillHeight: true; Layout.leftMargin: 20; Layout.rightMargin: 20; Layout.bottomMargin: 14; spacing: 16
@@ -199,18 +225,20 @@ ApplicationWindow {
                         Layout.fillWidth: true; wrapMode: Text.WordWrap; color: muted; font.pixelSize: 11
                     }
                     ListView {
-                        id: photoList; Layout.fillWidth: true; Layout.fillHeight: true; clip: true; spacing: 6; model: queuePhotos
+                        id: photoList; Layout.fillWidth: true; Layout.fillHeight: true; clip: true; spacing: 6
+                        model: visibleQueuePhotos
+                        currentIndex: visiblePhotoPosition
+                        keyNavigationEnabled: false
                         ScrollBar.vertical: ScrollBar {}
                         delegate: Rectangle {
+                            id: queueRow
                             required property var modelData
-                            required property int index
-                            readonly property bool shown: win.matchesQueueFilter(modelData.state)
-                            width: ListView.view.width; height: shown ? 83 : 0; visible: shown
-                            radius: 8; color: backend.current===index ? strong : panel; border.color: backend.current===index ? line : "transparent"
-                            MouseArea { anchors.fill: parent; enabled: !backend.busy; onClicked: backend.current=parent.index }
+                            width: ListView.view.width; height: 83
+                            radius: 8; color: backend.current === modelData.row ? strong : panel; border.color: backend.current === modelData.row ? line : "transparent"
+                            MouseArea { anchors.fill: parent; enabled: canNavigate; onClicked: backend.current = queueRow.modelData.row }
                             RowLayout {
                                 anchors.fill: parent; anchors.margins: 7; spacing: 7
-                                WorkCheckBox { checked: modelData.selected; implicitWidth: 26; enabled: !backend.busy; Accessible.name: "Select "+modelData.name; onClicked: backend.select(index,checked) }
+                                WorkCheckBox { checked: modelData.selected; implicitWidth: 26; enabled: !backend.busy; Accessible.name: "Select "+modelData.name; onClicked: backend.select(modelData.row, checked) }
                                 Rectangle { width: 39; height: 52; radius: 4; color: bg; clip: true
                                     WorkLabel { anchors.centerIn: parent; text: "3:4"; color: muted; font.pixelSize: 10 }
                                     Image { anchors.fill: parent; source: modelData.state!=="Imported" ? modelData.thumb : ""; fillMode: Image.PreserveAspectCrop; cache: false }
@@ -230,17 +258,21 @@ ApplicationWindow {
             ColumnLayout {
                 Layout.fillWidth: true; Layout.fillHeight: true; spacing: 10
                 Rectangle {
+                    id: emptyCanvas
                     visible: !hasPhoto; Layout.fillWidth: true; Layout.fillHeight: true
                     color: strong; radius: 12
                     DropArea { anchors.fill: parent; onDropped: drop => {if(drop.hasUrls&&!backend.busy)backend.add(drop.urls,true)} }
                     ColumnLayout {
                         anchors.centerIn: parent; spacing: 12
-                        RowLayout {
+                        GridLayout {
+                            id: importActions
+                            columns: emptyCanvas.width >= 350 ? 3 : 2
                             Layout.alignment: Qt.AlignHCenter
                             Action { objectName: "emptyOpenPhotos"; text: "Open photos…"; primary: true; enabled: !backend.busy; onClicked: photos.open() }
-                            Action { objectName: "emptyLoadSample"; text: "Load sample"; enabled: !backend.busy; onClicked: backend.loadSample() }
+                            Action { objectName: "emptyAddFolder"; text: "Add folder…"; enabled: !backend.busy; onClicked: openImportFolder() }
+                            Action { objectName: "emptyLoadSample"; Layout.columnSpan: importActions.columns === 2 ? 2 : 1; Layout.alignment: Qt.AlignHCenter; text: "Load sample"; enabled: !backend.busy; onClicked: backend.loadSample() }
                         }
-                        WorkLabel { Layout.alignment: Qt.AlignHCenter; text: "Or drop photos here"; color: muted }
+                        WorkLabel { Layout.alignment: Qt.AlignHCenter; text: "Choose multiple photos or drop them here"; color: muted }
                     }
                 }
                 SplitView {
@@ -338,6 +370,35 @@ ApplicationWindow {
                                 }
                             }
                         }
+                    }
+                }
+                RowLayout {
+                    visible: hasPhoto; Layout.fillWidth: true
+                    WorkLabel {
+                        objectName: "photoPosition"
+                        Layout.fillWidth: true; Layout.minimumWidth: 55
+                        text: "Photo " + (backend.current + 1) + " of " + queuePhotos.length
+                              + (filter === "All photos" ? "" : visiblePhotoPosition === -1 ? " · Outside filter"
+                                 : " · " + (visiblePhotoPosition + 1) + " of " + visibleQueuePhotos.length + " visible")
+                        color: muted; font.family: "Geist Mono"; font.pixelSize: 11; wrapMode: Text.WordWrap
+                    }
+                    Action {
+                        id: previousPhoto; objectName: "previousPhoto"; text: "Previous"
+                        enabled: canNavigate && previousPhotoRow >= 0
+                        ToolTip.visible: hovered; ToolTip.text: previousPhotoShortcut.nativeText
+                        onClicked: backend.current = previousPhotoRow
+                    }
+                    Action {
+                        id: nextPhoto; objectName: "nextPhoto"; text: "Next"
+                        enabled: canNavigate && nextPhotoRow >= 0
+                        ToolTip.visible: hovered; ToolTip.text: nextPhotoShortcut.nativeText
+                        onClicked: backend.current = nextPhotoRow
+                    }
+                    Action {
+                        id: nextReviewPhoto; objectName: "nextReviewPhoto"; text: "Next review"
+                        enabled: canNavigate && nextReviewPhotoRow >= 0
+                        ToolTip.visible: hovered; ToolTip.text: nextReviewPhotoShortcut.nativeText
+                        onClicked: backend.current = nextReviewPhotoRow
                     }
                 }
                 RowLayout {
@@ -481,7 +542,7 @@ ApplicationWindow {
         ColumnLayout { id: holder; visible: toggle.checked; Layout.fillWidth: true }
     }
     FileDialog { id: zipSave; title: "Export every queued photo to ZIP"; fileMode: FileDialog.SaveFile; defaultSuffix: "zip"; nameFilters: ["ZIP archive (*.zip)"]; onAccepted: backend.exportZip(selectedFile) }
-    FileDialog { id: photos; title: "Add portraits"; fileMode: FileDialog.OpenFiles; nameFilters: ["Photos (*.jpg *.jpeg *.png *.webp *.heic *.heif *.tif *.tiff *.dng *.cr2 *.cr3 *.nef *.arw *.raf *.orf *.rw2 *.pef *.raw)","All files (*)"]; onAccepted: backend.add(selectedFiles) }
+    FileDialog { id: photos; title: "Add photos to the queue"; fileMode: FileDialog.OpenFiles; nameFilters: ["Photos (*.jpg *.jpeg *.png *.webp *.heic *.heif *.tif *.tiff *.dng *.cr2 *.cr3 *.nef *.arw *.raf *.orf *.rw2 *.pef *.raw)","All files (*)"]; onAccepted: backend.add(selectedFiles) }
     FolderDialog { id: folders; title: folderAction==="import" ? "Add folder (including subfolders)" : "Choose output folder"; onAccepted: {if(folderAction==="import")backend.add([selectedFolder],true);else if(folderAction==="current")backend.exportCurrent(selectedFolder);else backend.batch(selectedFolder,true)} }
     FileDialog { id: referencePhoto; title: "Choose reference portrait"; onAccepted: backend.setReference(selectedFile) }
     FileDialog { id: jsonOpen; title: "Open "+(fileAction==="loadPreset"?"preset":"session"); nameFilters: ["JSON (*.json)"]; onAccepted: {if(fileAction==="loadPreset")backend.loadPreset(selectedFile);else backend.loadSession(selectedFile)} }
@@ -573,4 +634,7 @@ ApplicationWindow {
     Shortcut { sequences: [StandardKey.Open]; onActivated: photos.open() }
     Shortcut { sequences: [StandardKey.Undo]; onActivated: backend.undo() }
     Shortcut { sequence: "Ctrl+Return"; onActivated: backend.preview() }
+    Shortcut { id: previousPhotoShortcut; sequence: "Alt+Left"; enabled: previousPhoto.enabled; onActivated: backend.current = previousPhotoRow }
+    Shortcut { id: nextPhotoShortcut; sequence: "Alt+Right"; enabled: nextPhoto.enabled; onActivated: backend.current = nextPhotoRow }
+    Shortcut { id: nextReviewPhotoShortcut; sequence: "Alt+Shift+R"; enabled: nextReviewPhoto.enabled; onActivated: backend.current = nextReviewPhotoRow }
 }

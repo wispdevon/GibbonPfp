@@ -140,6 +140,7 @@ QVariantList Controller::items() const {
     for (int i = 0; i < queue.size(); ++i) {
         auto &q = queue[i];
         list << QVariantMap{
+            {"row", i},
             {"name", QFileInfo(q.path).fileName()},
             {"path", q.path},
             {"state", q.state},
