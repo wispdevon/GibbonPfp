@@ -16,6 +16,10 @@ On Linux, default to Qt's built-in theme for reliable desktop startup.
 Use the shared palette, dot grid, and control geometry. Use `#d3cec5` for light
 separators and `#414447` for dark separators. Keep status labels legible at the
 smallest supported UI scale.
+Give dropdown values and option labels 12 logical pixels of horizontal padding.
+Separate the value from the indicator by at least 4 pixels and inset the indicator
+12 pixels from the trailing edge. Option rows use the popup viewport width and
+are at least 32 pixels high. Elide long labels within the available width.
 
 ## Work surface
 
@@ -25,7 +29,7 @@ adjustments collapse independently and initially hide when logical space is limi
 Narrow workspaces show at most one sidebar. Adjustment sections are Frame, Refine,
 Export. Dense regions scroll independently. Minimum window size is 1024 × 720. Avoid nested cards,
 decorative heroes, pills for ordinary commands, and distracting idle animation.
-Place **Open photos…** and **Load sample** in the empty crop canvas.
+Place **Open photos…**, **Add folder…**, and **Load sample** in the empty crop canvas.
 
 Output previews are decoded from the actual JPEG/PNG bytes. The left pane shows
 the finished export inside the editable crop, over a dimmed
@@ -37,8 +41,9 @@ relative to each photo’s automatic frame, from 40–100%: 100% is the automati
 crop, and lower percentages widen it. Preserve the requested headroom fraction
 while zooming where source space permits. Headroom changes recalculate automatic
 framing without resetting the selected zoom. Keep the percentage through dragging,
-undo, and sessions; report source-boundary limits. A Load sample button provides
-a flat illustrated portrait with known head geometry for demonstrating framing.
+undo, and sessions; report source-boundary limits. **Load sample** opens a bundled
+portrait of a fictional person. Run the same framing and removal pipeline used for
+imported portraits so the sample can demonstrate both tools.
 
 Background removal uses a frame ten zoom percentage points wider than the export
 (65% → 55%, including a removal-only 30% frame at the 40% slider minimum).
@@ -122,6 +127,11 @@ visibility. The selected count and **Prepare selected**, **Remove selected**, an
 **Export selected** include checked photos hidden by the filter. Show the hidden
 count when a filter hides checked photos. Disable the commands when
 the checked set is empty. **Export current** uses the open photo.
+Keep the current position visible. Show its position in the full queue and in the
+active filter, or say **Outside filter**. **Previous** and **Next** move through
+visible queue entries without wrapping. **Next review** searches the whole queue
+for another photo awaiting review and wraps once. Navigation preserves checks and
+the filter.
 Folder exports write each successful photo as it completes and report holds or
 failures. Completed output stays on disk after cancellation.
 

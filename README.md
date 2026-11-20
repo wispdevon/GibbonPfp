@@ -26,9 +26,9 @@ pictures. Import portraits, adjust framing and brightness, optionally remove the
 background, and export a single photo or a batch without overwriting originals.
 The default output is **360 × 480 pixels, portrait 3:4**, with **70% crop zoom, 8% headroom, Fast background removal, white JPEG backdrop, JPEG quality 80, and Standard screen sharpening**.
 
-![Native HeadshotFlow workspace with the built-in sample, 12% headroom, and 60% crop zoom](docs/images/workspace.png)
+![Native HeadshotFlow workspace with the built-in sample, 6% headroom, and 65% crop zoom](docs/images/workspace.png)
 
-*Native Linux screenshot using the built-in illustrated sample with background removal Off.*
+*Native Linux screenshot using Fast background removal on the built-in portrait of a fictional person.*
 
 <details>
 <summary>Table of contents</summary>
@@ -56,7 +56,8 @@ The default output is **360 × 480 pixels, portrait 3:4**, with **70% crop zoom,
   with a draggable divider and collapsible queue and adjustment panels.
 - **Portrait framing:** face-aware automatic crops, adjustable headroom,
   **40–100% crop zoom**, dragging, arrow keys, rotation, and per-photo review gates.
-- **A built-in sample:** load a flat stick-figure portrait to try the controls.
+- **A built-in sample:** try framing and background removal on a generated portrait
+  of a fictional person.
 - **Refinement:** perceptual brightness and reference-portrait brightness matching.
 - **Local background removal:** Fast or optional High Quality, mask inspection,
   keep/remove brushes, feathering, and transparency.
@@ -128,9 +129,9 @@ See [Arch packaging](docs/BUILDING.md#arch-linux--aur-and-local-updates).
 
 ## Desktop usage
 
-Start with **Load sample**, or bring in portraits with **Add photos** or
-**Add folder**. Folder import includes subfolders. Open a photo in the editor to adjust
-**Frame**, **Refine**, and **Export**, then check the encoded output in **Result**.
+Start with **Load sample**, or bring in portraits with **Add photos…** or
+**Add folder…**. Folder import includes subfolders. Open a photo in the editor to
+adjust **Frame**, **Refine**, and **Export**, then check the encoded output in **Result**.
 See the [desktop quickstart](docs/quickstart.md) for your first export.
 
 | Command | Photos it affects |
@@ -141,6 +142,8 @@ See the [desktop quickstart](docs/quickstart.md) for your first export.
 | **Export queue to ZIP** | Every queued photo |
 
 The queue shows the checked count and how many checked photos a filter hides.
+Use **Previous** and **Next** to move through the active filter. **Next review**
+finds another photo needing review anywhere in the queue and keeps the filter.
 
 Edits apply to the open photo. Confirm **Apply to all** to copy its controls,
 recalculate each crop, clear manual framing and brush strokes, and invalidate
@@ -176,10 +179,9 @@ with the source dimmed outside; the right shows **Updating…** while processing
 Mouse-driven sliders and crop dragging process on release. **Refresh preview**
 explicitly recomputes the current settings.
 
-**Load sample** generates an illustration in the app cache. Its known head geometry
-makes it useful for trying zoom and headroom. Only the exact generated sample uses
-synthetic landmarks; imported photos use face detection. Repeated clicks select
-its existing queue entry.
+**Load sample** opens an embedded, generated portrait from the app cache. It uses
+the same local face detection and background removal as imported photos. Repeated
+clicks select its existing queue entry.
 
 ### Masks and screen sharpening
 
