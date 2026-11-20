@@ -953,8 +953,10 @@ class ControllerTests : public QObject {
         QCOMPARE(c.selectedCount(), 2);
         for (const auto &size : sizes) {
             window->resize(size);
+            QTest::qWait(100);
             window->setProperty("adjustmentsOpen", size.width() >= 1100);
             window->setProperty("queueOpen", true);
+            QTRY_VERIFY(hidden->isVisible());
             capture("filtered-review", size);
         }
         QTest::mouseClick(window, Qt::LeftButton, Qt::NoModifier,
