@@ -15,6 +15,7 @@ class ImageStore : public QQuickImageProvider {
     ImageStore() : QQuickImageProvider(Image) {}
     QImage requestImage(const QString &id, QSize *size, const QSize &requested) override;
     void put(const QString &id, const QImage &image);
+    bool contains(const QString &id);
 
   private:
     QMutex mutex;
@@ -201,6 +202,7 @@ class Controller : public QObject {
     bool startExportRequest(const QVariantMap &options, const QUrl &destination,
                             bool replaceArchive, bool createFolder);
     void showResult(const gibbon::Result &r, int row);
+    bool seedSampleThumbnails();
     void processMany(QVector<int> rows, const QVariantMap &exportRequest = {}, bool replaceArchive = false,
                      bool createFolder = false);
 };

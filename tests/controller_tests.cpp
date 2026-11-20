@@ -1274,6 +1274,77 @@ class ControllerTests : public QObject {
         QCOMPARE(c.revision(), revision);
         QVERIFY(!c.busy());
     }
+    void sampleThumbnailsSurviveSessionAndRecovery() {
+        QTemporaryDir test;
+        QVERIFY(test.isValid());
+        const auto appName = QCoreApplication::applicationName();
+        QCoreApplication::setApplicationName(QFileInfo(test.path()).fileName());
+        const auto restoreAppName = qScopeGuard([&] { QCoreApplication::setApplicationName(appName); });
+        const QDir cache(QStandardPaths::writableLocation(QStandardPaths::CacheLocation));
+        QVERIFY(!cache.exists());
+        const auto cleanup = qScopeGuard([&] {
+            for (const auto *resource : gibbon::Engine::samplePortraitResources)
+                QFile::remove(cache.filePath(QFileInfo(resource).fileName()));
+            QDir().rmdir(cache.path());
+        });
+        const auto session = QUrl::fromLocalFile(test.filePath("session.json"));
+        const auto recovery = test.filePath("recovery");
+        auto thumbnail = [](Controller &c, ImageStore &store, int row) {
+            const QUrl url(c.items()[row].toMap()["thumb"].toString());
+            return store.requestImage(url.path().mid(1), nullptr, {});
+        };
+        QString secondPath, thirdPath;
+        QImage secondThumb;
+        ImageStore originalStore;
+        {
+            Controller c(&originalStore, nullptr, recovery);
+            c.loadSample();
+            QTRY_VERIFY_WITH_TIMEOUT(!c.busy(), 15000);
+            QCOMPARE(c.items().size(), 3);
+            secondPath = c.queue[1].path;
+            thirdPath = c.queue[2].path;
+            secondThumb = thumbnail(c, originalStore, 1);
+            QCOMPARE(secondThumb.pixelColor(48, 64).alpha(), 255);
+            c.saveSession(session);
+        }
+        {
+            ImageStore store;
+            Controller c(&store, nullptr, {}, false);
+            c.loadSession(session);
+            QTRY_VERIFY_WITH_TIMEOUT(!c.busy(), 15000);
+            QCOMPARE(thumbnail(c, store, 1), secondThumb);
+            c.setCurrent(1);
+            QTRY_VERIFY_WITH_TIMEOUT(!c.busy(), 15000);
+            const auto processed = thumbnail(c, store, 1);
+            QVERIFY(processed != secondThumb);
+            c.loadSample();
+            QTRY_VERIFY_WITH_TIMEOUT(!c.busy(), 15000);
+            QCOMPARE(thumbnail(c, store, 1), processed);
+        }
+        QVERIFY(QFile::remove(secondPath));
+        QVERIFY(QFile::remove(thirdPath));
+        QImage replacement(120, 160, QImage::Format_RGB32);
+        replacement.fill(Qt::gray);
+        QVERIFY(replacement.save(thirdPath));
+        {
+            Controller c(&originalStore, nullptr, {}, false);
+            c.loadSession(session);
+            QTRY_VERIFY_WITH_TIMEOUT(!c.busy(), 15000);
+            QCOMPARE(thumbnail(c, originalStore, 1).pixelColor(48, 64).alpha(), 0);
+            QCOMPARE(thumbnail(c, originalStore, 2).pixelColor(48, 64).alpha(), 0);
+        }
+        {
+            ImageStore store;
+            Controller c(&store, nullptr, recovery);
+            QVERIFY(c.recoveryPending());
+            c.resolveRecovery(true);
+            QCOMPARE(c.queue[1].state, "Missing");
+            QCOMPARE(c.queue[2].state, "Needs review");
+            QCOMPARE(thumbnail(c, store, 0).pixelColor(48, 64).alpha(), 255);
+            QCOMPARE(thumbnail(c, store, 1).pixelColor(48, 64).alpha(), 0);
+            QCOMPARE(thumbnail(c, store, 2).pixelColor(48, 64).alpha(), 0);
+        }
+    }
     void editAndSession() {
         QTemporaryDir dir;
         QImage image(600, 800, QImage::Format_RGB888);

@@ -44,10 +44,11 @@ static void applyOutputStyle(Settings &settings, const Settings &style) {
     settings.sharpenScreen = style.sharpenScreen;
     settings.sharpening = style.sharpening;
 }
-static QString thumbnailKey(const QString &path) {
+static QString thumbnailKey(const QString &path, const QString &fingerprint) {
     return "thumb" +
            QString::fromLatin1(
-               QCryptographicHash::hash(path.toUtf8(), QCryptographicHash::Sha256).toHex());
+               QCryptographicHash::hash(path.toUtf8() + '\0' + fingerprint.toLatin1(),
+                                        QCryptographicHash::Sha256).toHex());
 }
 QImage ImageStore::requestImage(const QString &id, QSize *size, const QSize &requested) {
     QMutexLocker lock(&mutex);
@@ -65,6 +66,10 @@ QImage ImageStore::requestImage(const QString &id, QSize *size, const QSize &req
 void ImageStore::put(const QString &id, const QImage &i) {
     QMutexLocker lock(&mutex);
     images[id] = i;
+}
+bool ImageStore::contains(const QString &id) {
+    QMutexLocker lock(&mutex);
+    return images.contains(id);
 }
 Controller::Controller(ImageStore *store, QObject *parent, const QString &recoveryDirectory, bool enableRecovery) : QObject(parent), images(store) {
     progressTimer.setInterval(100);
@@ -176,7 +181,8 @@ QVariantList Controller::items() const {
             {"selected", q.selected},
             {"error", q.error},
             {"warnings", q.warnings},
-            {"thumb", QString("image://photos/%1?%2").arg(thumbnailKey(q.path)).arg(generation)}};
+            {"thumb", QString("image://photos/%1?%2")
+                          .arg(thumbnailKey(q.path, q.fingerprint)).arg(generation)}};
     }
     return list;
 }
@@ -277,24 +283,60 @@ void Controller::loadSample() {
             return;
         }
     }
-    bool appended = false;
+    bool queueChanged = false;
     for (auto &sample : samples) {
-        if (sample.row >= 0)
+        if (sample.row >= 0) {
+            auto &item = queue[sample.row];
+            if (item.fingerprint.isEmpty()) {
+                item.fingerprint = sample.photo.fingerprint;
+                if (item.state == "Missing") {
+                    item.state = "Restored";
+                    item.error.clear();
+                }
+                queueChanged = true;
+            }
             continue;
-        QImageReader thumbnail(sample.resource);
-        thumbnail.setScaledSize(QSize(96, 128));
-        images->put(thumbnailKey(sample.photo.path), thumbnail.read());
+        }
         sample.row = int(queue.size());
         queue.append(std::move(sample.photo));
-        appended = true;
+        queueChanged = true;
     }
+    const bool seeded = seedSampleThumbnails();
     const int firstRow = samples.front().row;
     if (index != firstRow)
         setCurrent(firstRow);
     else if (details.isEmpty())
         preview();
-    else if (appended)
+    else if (queueChanged || seeded)
         emit changed();
+}
+bool Controller::seedSampleThumbnails() {
+    const auto cachePath = QStandardPaths::writableLocation(QStandardPaths::CacheLocation);
+    if (cachePath.isEmpty())
+        return false;
+    const QDir directory(cachePath);
+    bool seeded = false;
+    for (const auto *resource : Engine::samplePortraitResources) {
+        const auto path = directory.filePath(QFileInfo(resource).fileName());
+        const auto item = std::find_if(queue.cbegin(), queue.cend(), [&](const Item &candidate) {
+            return candidate.path == path;
+        });
+        if (item == queue.cend() || item->fingerprint.isEmpty())
+            continue;
+        const auto key = thumbnailKey(item->path, item->fingerprint);
+        if (images->contains(key) || item->fingerprint != sourceFingerprint(resource))
+            continue;
+        QImageReader reader(resource);
+        reader.setScaledSize(QSize(96, 128));
+        const auto thumbnail = reader.read();
+        if (!thumbnail.isNull()) {
+            images->put(key, thumbnail);
+            seeded = true;
+        }
+    }
+    if (seeded)
+        ++generation;
+    return seeded;
 }
 void Controller::remember() {
     if (index >= 0) {
@@ -455,12 +497,11 @@ void Controller::showResult(const Result &r, int row) {
     q.warnings = r.warnings;
     q.error.clear();
     q.state = r.review ? "Needs review" : "Ready";
-    images->put(thumbnailKey(q.path),
+    images->put(thumbnailKey(q.path, q.fingerprint),
                 r.preview.scaled(96, 128, Qt::KeepAspectRatio, Qt::SmoothTransformation));
     if (row == index) {
         images->put("source", r.source);
         images->put("output", r.preview);
-        images->put("mask", r.mask);
         details = {{"width", r.outputSize.width()},
                    {"height", r.outputSize.height()},
                    {"sourceWidth", r.sourceSize.width()},
@@ -964,6 +1005,7 @@ void Controller::loadSession(const QUrl &u) {
             loaded << q;
         }
         queue = loaded;
+        seedSampleThumbnails();
         importDefaults = defaults;
         presetOutputPending = false;
         index = queue.empty() ? -1 : 0;

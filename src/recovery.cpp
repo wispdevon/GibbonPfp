@@ -143,6 +143,7 @@ void Controller::resolveRecovery(bool restore) {
         importDefaults = Settings::fromJson(recoverySnapshot["importDefaults"].toObject());
         importDefaults.crop = {}; importDefaults.cropBasis = {}; importDefaults.strokes = {}; importDefaults.approved = false;
         queue = restored;
+        seedSampleThumbnails();
         index = recoverySnapshot["active"].toInt();
         details.clear();
         status = "Workspace restored · refresh a preview when ready";
