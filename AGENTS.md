@@ -8,6 +8,7 @@ for UI changes, and [README.md](README.md) for build commands.
 - Default dimensions are width 360 × height 480, portrait 3:4.
 - Preserve source photos and review gates; manual approval is per image.
 - Keep model URLs and SHA-256 hashes pinned in the manifest. Do not commit ONNX files.
+- Run GUI tests, app launches for inspection, and screenshot captures on a virtual display or a verified empty, inactive Hyprland workspace. Keep focus on the user's current workspace.
 - Validate with CTest, CLI integration tests, and native Qt screenshots. Browser tools
   do not inspect this native desktop interface.
 - Never claim clipping-free JPEG detail, perfect segmentation, universal RAW camera

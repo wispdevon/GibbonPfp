@@ -31,8 +31,10 @@ fi
 GIBBON_DISABLE_SOURCE_MODELS=1 QT_QPA_PLATFORM=offscreen QT_QUICK_BACKEND=software \
     "$install_prefix/bin/gibbonpfp" --smoke-test
 # Display-backed Qt platform themes initialize differently from the offscreen plugin.
-if [[ -n ${WAYLAND_DISPLAY:-} || -n ${DISPLAY:-} ]]; then
-    GIBBON_DISABLE_SOURCE_MODELS=1 "$install_prefix/bin/gibbonpfp" --smoke-test
+if command -v xvfb-run >/dev/null; then
+    xvfb-run -a env -u WAYLAND_DISPLAY QT_QPA_PLATFORM=xcb GIBBON_DISABLE_SOURCE_MODELS=1 "$install_prefix/bin/gibbonpfp" --smoke-test
+else
+    echo "Skipping display-backed smoke test: xvfb-run unavailable" >&2
 fi
 GIBBON_DISABLE_SOURCE_MODELS=1 python3 "$project_dir/scripts/test_cli.py" "$install_prefix/bin/gibbonpfp"
 printf 'Installed current workspace: %s/bin/gibbonpfp\n' "$install_prefix"
