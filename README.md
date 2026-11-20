@@ -6,6 +6,7 @@
   <p>Frame, refine, and export consistent portraits. All on your device.</p>
   <p>
     <a href="https://github.com/wispdevon/GibbonPfp/releases">Releases</a> ·
+    <a href="docs/quickstart.md">Quickstart</a> ·
     <a href="docs/BUILDING.md">Build instructions</a> ·
     <a href="https://github.com/wispdevon/GibbonPfp/issues">Report a bug / Request a feature</a>
   </p>
@@ -27,7 +28,7 @@ The default output is **360 × 480 pixels, portrait 3:4**, with **70% crop zoom,
 
 ![Native HeadshotFlow workspace with the built-in sample, 12% headroom, and 60% crop zoom](docs/images/workspace.png)
 
-*Native Linux screenshot using the built-in illustrated sample; no private photos.*
+*Native Linux screenshot using the built-in illustrated sample with background removal Off.*
 
 <details>
 <summary>Table of contents</summary>
@@ -65,8 +66,8 @@ The default output is **360 × 480 pixels, portrait 3:4**, with **70% crop zoom,
   output without automatic upscaling, prefixes, and collision-safe filenames.
 - **Input formats:** JPEG, PNG, WebP, TIFF, HEIC, and camera RAW, with RAW
   white-balance presets, temperature/tint, and highlight recovery.
-- **Batch work:** folder import, selection-based adjustments, review/approval,
-  automatic processing, reusable presets, sessions, undo, and reset.
+- **Batch work:** folder import, preparation and export for checked photos,
+  whole-queue ZIP, per-photo approvals, reusable presets, sessions, undo, and reset.
 - **Appearance:** light/dark themes, 80–150% UI scaling, Graphite/Blue accents,
   and embedded fonts throughout Qt controls and dropdowns.
 
@@ -127,25 +128,36 @@ See [Arch packaging](docs/BUILDING.md#arch-linux--aur-and-local-updates).
 
 ## Desktop usage
 
-1. **Add photos**, **Add folder**, or **Load sample**. Folder import includes subfolders.
-2. Select a portrait and adjust **Frame**, **Refine**, and **Export**.
-3. Inspect the right **Result** pane: it shows the actual decoded JPEG/PNG output.
-4. Controls edit only the current photo; switching photos keeps each photo’s settings.
-   **Apply to all** copies the controls to every queued photo, including unchecked photos,
-   recalculates each frame, clears manual crops and brushes, and invalidates approvals.
-   Later imports inherit the last applied settings. Use **Prepare selected** to process a selection.
-5. Adjust or approve photos marked **Needs review**, or explicitly choose the
-   **Fully automatic batch** policy and use **Apply to all**.
-6. Export the current photo or selected batch to an output folder, or choose
-   **Export queue to ZIP** in Export controls. ZIP includes every photo regardless of
-   selection, plus a JSON report. It saves only when every photo can export: review
-   holds, missing files, failures, or cancellation leave the destination unchanged.
-   Duplicate names receive suffixes. Photos are encoded one at a time.
+Start with **Load sample**, or bring in portraits with **Add photos** or
+**Add folder**. Folder import includes subfolders. Open a photo in the editor to adjust
+**Frame**, **Refine**, and **Export**, then check the encoded output in **Result**.
+See the [desktop quickstart](docs/quickstart.md) for your first export.
 
-Hold **Hold to view mask** with the mouse or keyboard Space to inspect the unsmoothed
-mask. Releasing it or moving focus restores the encoded result. Brushes also work
-on the composite preview. Sessions and recovery preserve the queue’s import defaults;
-older sessions retain explicit photo settings and use factory defaults for new imports.
+| Command | Photos it affects |
+| --- | --- |
+| **Export current** | The open photo, regardless of its checkbox |
+| **Prepare selected**, **Export selected**, **Remove selected** | Checked photos, including those hidden by the queue filter |
+| **Apply to all** | Every queued photo and future imports |
+| **Export queue to ZIP** | Every queued photo |
+
+The queue shows the checked count and how many checked photos a filter hides.
+
+Edits apply to the open photo. Confirm **Apply to all** to copy its controls,
+recalculate each crop, clear manual framing and brush strokes, and invalidate
+approvals.
+Sessions and recovery preserve the queue’s import defaults. Older sessions retain
+explicit photo settings and use factory defaults for new imports.
+
+For **Needs review**, read the framing warning, adjust the crop as needed, and use
+**Approve current framing** when satisfied. Approval is per photo. If you choose
+**Fully automatic batch**, it allows fallback framing and records warnings. Use
+**Apply to all** if you want that policy across the queue.
+
+Folder exports save successful photos and write a JSON report. A hold, failure,
+or cancellation can leave a partial export on disk. **Export queue to ZIP** under
+**Export** commits the archive only after every photo passes processing and review.
+A hold, failure, or cancellation leaves the destination intact. A successful ZIP
+contains `export-report.json`. Duplicate output names receive numeric suffixes.
 
 ### Crop, headroom, and zoom
 
@@ -171,7 +183,9 @@ its existing queue entry.
 
 ### Masks and screen sharpening
 
-Use the right pane's **Result / Mask** selector to inspect output or the mask.
+Press and hold **Hold to view mask** in the right pane with the pointer or focus
+it and hold **Space**. Releasing it, moving focus, or changing photos restores
+the encoded result. Brushes also work on the composite preview.
 Both removal modes see **10 percentage points of wider crop context**: a 65%
 export crop uses a 55% removal frame, and 40% uses a removal-only 30% frame.
 The extra frame follows the current crop position and headroom anchor, limited
@@ -426,16 +440,16 @@ not a separate CLI flag.
 | Setting | Default | Behavior |
 | --- | --- | --- |
 | `autoCrop` | `true` | Estimate a head-and-shoulders frame |
-| `cropZoom` | `100` | 40–100%; lower values widen automatic framing |
+| `cropZoom` | `70` | 40–100%; lower values widen automatic framing |
 | `headroom` | `0.08` | Requested fraction above the estimated head; 0–0.25 |
 | `capped` | `true` | Maximum 360 × 480 pixels |
 | `width`, `height` | `360`, `480` | Exact 3:4; both `0` for source-sized uncapped output |
 | `brightness` | `0` | Gentle lightness shift, −1 to 1 |
-| `background` | `off` | `off`, `fast`, or `quality` |
+| `background` | `fast` | `off`, `fast`, or `quality` |
 | `feather` | `0` | Additional mask blur, 0–10 output pixels in the desktop |
 | `sharpenScreen` | `true` | Apply sharpening at final output size |
 | `sharpening` | `standard` | `low`, `standard`, or `high` |
-| `format`, `quality` | `jpeg`, `92` | JPEG/PNG format and JPEG quality |
+| `format`, `quality` | `jpeg`, `80` | JPEG/PNG format and JPEG quality |
 | `automatic` | `false` | Allow uncertain crop fallbacks to export |
 
 Sessions store source paths, per-photo settings, crop baselines and zoom,
@@ -519,7 +533,7 @@ tests/               Core/controller tests and synthetic fixtures
 scripts/             Asset fetch, validation, local installation, and packaging
 packaging/aur/       Arch PKGBUILD and AUR metadata
 cmake/               Runtime setup and dependency triplets
-docs/                Build/distribution notes and native workspace screenshot
+docs/                Quickstart, shared design, build notes, and native screenshot
 .github/workflows/   Native desktop build/test/package matrix
 ```
 

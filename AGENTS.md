@@ -1,7 +1,8 @@
-# GibbonPfp
+# HeadshotFlow
 
-C++20 / Qt Quick desktop application with a shared CLI image engine. Follow
-[DESIGN.md](DESIGN.md) for UI changes and [README.md](README.md) for build commands.
+C++20 / Qt Quick desktop application with a shared CLI image engine. Follow the
+[project design](DESIGN.md) and [shared workspace design](docs/shared/DESIGN.md)
+for UI changes, and [README.md](README.md) for build commands.
 
 - Keep GUI and CLI processing in `gibbon_core`; never duplicate image math in QML.
 - Default dimensions are width 360 × height 480, portrait 3:4.
@@ -12,6 +13,9 @@ C++20 / Qt Quick desktop application with a shared CLI image engine. Follow
 - Never claim clipping-free JPEG detail, perfect segmentation, universal RAW camera
   compatibility, or platform validation without evidence.
 - Use Conventional Commit subjects. Do not commit build products or private photos.
+- Keep reusable design guidance in `docs/shared/DESIGN.md` and HeadshotFlow
+  decisions in `DESIGN.md`. Track guidance that future contributors need in
+  the repository and link it from the relevant project entry point.
 
 ## Local test installation
 

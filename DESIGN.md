@@ -1,7 +1,7 @@
 # HeadshotFlow Design
 
-HeadshotFlow adapts the portable visual language from Strider's `DESIGN.md` to a
-native Qt Quick workspace. It is an editing tool, with no account or web service.
+HeadshotFlow adapts the [shared workspace design](docs/shared/DESIGN.md) to a
+native Qt Quick portrait editor. This file specifies the desktop adaptation.
 
 ## Foundation
 
@@ -12,19 +12,9 @@ Use Medium (500) for work text and controls, DemiBold (600) for actions, and Bol
 fields, checkboxes, tooltips, and app dialogs. Validate bundled font loading at
 startup. Native operating-system file dialogs retain their platform typography.
 
-| Token | Light | Dark |
-| --- | --- | --- |
-| Canvas | `#efece6` | `#151617` |
-| Foreground | `#17181b` | `#f2f0ea` |
-| Panel | `#f8f6f2` | `#202224` |
-| Strong surface | `#e7e0d5` | `#2a2d30` |
-| Muted text | `#626970` | `#a6abb0` |
-| Accent | `#1d1f23` | `#bfc9d1` |
-
-The light muted text is slightly darker than Strider's base token for small
-desktop labels. Use a subtle 18px dot grid on the continuous canvas, 8px control
-corners, 12px panels, and 40px command targets. State colors stay small and always
-have a text label. Theme follows the OS initially and persists locally.
+Use the shared palette, dot grid, and control geometry. Use `#d3cec5` for light
+separators and `#414447` for dark separators. Keep status labels legible at the
+smallest supported UI scale.
 
 ## Work surface
 
@@ -34,6 +24,7 @@ adjustments collapse independently and initially hide when logical space is limi
 Narrow workspaces show at most one sidebar. Adjustment sections are Frame, Refine,
 Export. Dense regions scroll independently. Minimum window size is 1024 × 720. Avoid nested cards,
 decorative heroes, pills for ordinary commands, and distracting idle animation.
+Place **Open photos…** and **Load sample** in the empty crop canvas.
 
 Output previews are decoded from the actual JPEG/PNG bytes. The left pane shows
 the finished export inside the editable crop, over a dimmed
@@ -80,7 +71,8 @@ hover and keyboard-focus states. Keep both image panes visible at all scales.
 ## Review behavior
 
 Never present estimated headroom as a professional identity-photo standard.
-Show the reason when a crop needs review. An explicit per-photo approval or the
+Keep the reason beside the approval action when a crop needs review. Allow the
+reason to wrap in a compact workspace. An explicit per-photo approval or the
 fully automatic policy releases the hold. Settings changes invalidate approval.
 
 ## High Quality model loading
@@ -116,14 +108,25 @@ High Quality consent and processing caches never persist.
 
 ## Queue application and ZIP export
 
-Factory settings use 70% crop zoom, 8% headroom, Fast removal, white JPEG at quality
-80, and Standard screen sharpening. Edits stay local until Apply to all. Applying
-copies controls to every photo, resets manual framing and strokes, invalidates
-approvals, and sets defaults for future imports. Refresh the active photo immediately
-and other photos when viewed or processed. Undo remains per photo.
+Factory settings use a 360 × 480 cap, 70% crop zoom, 8% headroom, Fast removal,
+white JPEG at quality 80, and Standard screen sharpening. Edits affect the open
+photo. **Apply to all** confirms its scope before copying the open photo’s
+controls to every queued photo, clearing their manual framing and strokes,
+invalidating approvals, and setting defaults for future imports. Refresh the
+open photo immediately and other photos when viewed or processed. Undo remains
+per photo.
+
+Opening a photo and checking it are independent. The queue filter controls
+visibility. The selected count and **Prepare selected**, **Remove selected**, and
+**Export selected** include checked photos hidden by the filter. Show the hidden
+count when a filter hides checked photos. Disable the commands when
+the checked set is empty. **Export current** uses the open photo.
+Folder exports write each successful photo as it completes and report holds or
+failures. Completed output stays on disk after cancellation.
 
 Hold to view mask works with pointer or keyboard Space, returning to the composite
 on release, focus loss, or photo change. Selecting brushes does not latch mask view.
-Export queue to ZIP lives in Export controls and uses the native save dialog. All
-photos must pass processing and review before the archive is atomically published;
-cancellation and failures leave the existing destination intact. Include an export report.
+**Export queue to ZIP** lives in Export controls and uses the native save dialog.
+It includes all queue entries. Every photo must pass processing and review before
+the archive is atomically published. Cancellation and failures leave the existing
+destination intact. Include an export report.
