@@ -541,13 +541,31 @@ class ControllerTests : public QObject {
         QScopeGuard deleteWindow([&] { qDeleteAll(qml.rootObjects()); });
         c.add({QUrl::fromLocalFile(path)});
         QTRY_VERIFY_WITH_TIMEOUT(!c.busy(), 15000);
-        auto *crop = window->findChild<QQuickItem *>("cropOutput");
+        auto *source = window->findChild<QQuickItem *>("cropSource");
+        auto *crop = window->findChild<QQuickItem *>("cropOutline");
+        auto *stroke = window->findChild<QQuickItem *>("cropOutlineStroke");
+        auto *focusStroke = window->findChild<QQuickItem *>("cropOutlineFocus");
         auto *result = window->findChild<QQuickItem *>("resultImage");
         auto *input = window->findChild<QQuickItem *>("cropInput");
-        QVERIFY(crop && result && input);
+        QVERIFY(source && crop && stroke && focusStroke && result && input);
+        QCOMPARE(source->childItems(), QList<QQuickItem *>{crop});
+        QCOMPARE(crop->childItems(), (QList<QQuickItem *>{stroke, input}));
+        QCOMPARE(crop->property("color").value<QColor>(), QColor(Qt::transparent));
+        QCOMPARE(stroke->property("color").value<QColor>(), QColor(Qt::transparent));
+        QCOMPARE(focusStroke->property("color").value<QColor>(), QColor(Qt::transparent));
+        const auto sourcePixels = gibbon::Engine::decode(path, {});
         auto verifyOutput = [&] {
-            QCOMPARE(crop->property("source").toUrl(), result->property("source").toUrl());
-            QVERIFY(crop->property("source").toString().endsWith(QString::number(c.revision())));
+            QCOMPARE(source->property("source").toUrl(),
+                     QUrl(QString("image://photos/source?%1").arg(c.revision())));
+            QCOMPARE(result->property("source").toUrl(),
+                     QUrl(QString("image://photos/output?%1").arg(c.revision())));
+            QVERIFY(crop->isVisible());
+            QCOMPARE(crop->width(), source->property("paintedWidth").toDouble() * c.result()["cropW"].toDouble());
+            QCOMPARE(crop->height(), source->property("paintedHeight").toDouble() * c.result()["cropH"].toDouble());
+            const auto oriented = sourcePixels.transformed(QTransform().rotate(c.settings()["rotation"].toInt()))
+                                      .scaled(1200, 1200, Qt::KeepAspectRatio, Qt::SmoothTransformation)
+                                      .convertToFormat(QImage::Format_RGBA8888);
+            QCOMPARE(images->requestImage("source", nullptr, {}), oriented);
             QSize size;
             auto decoded = images->requestImage("output", &size, {});
             QVERIFY(!decoded.isNull());
@@ -584,7 +602,6 @@ class ControllerTests : public QObject {
             QDir().mkpath(captures);
         QVERIFY(!window->findChild<QQuickItem *>("maskHold"));
         window->requestActivate();
-        QCOMPARE(result->property("source").toUrl(), crop->property("source").toUrl());
         auto *tabs = window->findChild<QQuickItem *>("inspectorTabs");
         QVERIFY(tabs);
         QCOMPARE(tabs->property("currentIndex").toInt(), 0);
@@ -771,6 +788,7 @@ class ControllerTests : public QObject {
         c.working = false;
         // Crop arrows belong to the focused left pane, including after scaling.
         input->forceActiveFocus();
+        QVERIFY(focusStroke->isVisible());
         double x = c.result()["cropX"].toDouble();
         QTest::keyClick(window, Qt::Key_Right);
         QTRY_VERIFY_WITH_TIMEOUT(!c.busy(), 15000);
@@ -826,6 +844,20 @@ class ControllerTests : public QObject {
         QTRY_VERIFY(!c.qualityConfirmationPending());
         QVERIFY(!c.busy());
         QVERIFY(!c.highQualityLoaded());
+        c.set("background", "fast");
+        const auto unreadablePath = dir.filePath("unreadable.png");
+        QFile unreadable(unreadablePath);
+        QVERIFY(unreadable.open(QIODevice::WriteOnly));
+        QVERIFY(unreadable.write("unreadable image") > 0);
+        unreadable.close();
+        c.add({QUrl::fromLocalFile(unreadablePath)});
+        QTRY_VERIFY_WITH_TIMEOUT(!c.busy(), 15000);
+        c.setCurrent(c.items().size() - 1);
+        QVERIFY(source->property("source").toUrl().isEmpty());
+        QVERIFY(!crop->isVisible());
+        QTRY_VERIFY_WITH_TIMEOUT(!c.busy(), 15000);
+        QVERIFY(source->property("source").toUrl().isEmpty());
+        QVERIFY(!crop->isVisible());
         QSettings().clear();
     }
 

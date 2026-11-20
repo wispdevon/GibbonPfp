@@ -392,24 +392,38 @@ ApplicationWindow {
                         Rectangle {
                             Layout.fillWidth: true; Layout.fillHeight: true; color: strong; radius: 12; clip: true
                             Image {
-                                id: portrait; anchors.fill: parent; anchors.margins: 12
+                                id: portrait; objectName: "cropSource"
+                                anchors.fill: parent; anchors.margins: 12
                                 fillMode: Image.PreserveAspectFit; cache: false
-                                source: outputUrl ? "image://photos/source?"+backend.revision : ""
-                                Rectangle { anchors.fill: parent; color: "#88000000"; visible: !!outputUrl }
+                                source: hasPhoto && backend.result.sourceWidth > 0 ? "image://photos/source?" + backend.revision : ""
+                                visible: status === Image.Ready
                                 Rectangle {
-                                    id: cropBox
-                                    visible: !!outputUrl
+                                    id: cropBox; objectName: "cropOutline"
+                                    visible: backend.result.cropW > 0
                                     readonly property real ox: (portrait.width-portrait.paintedWidth)/2
                                     readonly property real oy: (portrait.height-portrait.paintedHeight)/2
                                     x: ox+(backend.result.cropX||0)*portrait.paintedWidth
                                     y: oy+(backend.result.cropY||0)*portrait.paintedHeight
                                     width: (backend.result.cropW||1)*portrait.paintedWidth
                                     height: (backend.result.cropH||1)*portrait.paintedHeight
-                                    Checkerboard { anchors.fill: parent }
-                                    Image { objectName: "cropOutput"; anchors.fill: parent; source: outputUrl; cache: false; fillMode: Image.Stretch }
-                                    Rectangle { anchors.fill: parent; color: "transparent"; border.color: cropInput.activeFocus ? accent : "white"; border.width: 2 }
-                                    Repeater { model: 2; Rectangle { required property int index; x: (index+1)*cropBox.width/3; height: cropBox.height; width: 1; color: "#66ffffff" } }
-                                    Repeater { model: 2; Rectangle { required property int index; y: (index+1)*cropBox.height/3; width: cropBox.width; height: 1; color: "#66ffffff" } }
+                                    color: "transparent"
+                                    border.color: "#cc17181b"
+                                    border.width: 3
+                                    Rectangle {
+                                        objectName: "cropOutlineStroke"
+                                        anchors.fill: parent; anchors.margins: 1
+                                        color: "transparent"
+                                        border.color: "white"
+                                        border.width: 1
+                                        Rectangle {
+                                            objectName: "cropOutlineFocus"
+                                            anchors.fill: parent; anchors.margins: 1
+                                            visible: cropInput.activeFocus
+                                            color: "transparent"
+                                            border.color: accent
+                                            border.width: 1
+                                        }
+                                    }
                                     MouseArea {
                                         id: cropInput; objectName: "cropInput"
                                         anchors.fill: parent; enabled: !backend.busy; cursorShape: Qt.SizeAllCursor
