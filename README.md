@@ -143,10 +143,10 @@ photo, adds any missing sample entries, and leaves existing sample settings and
 checked states in place. Folder import with **Add folder…** includes subfolders.
 See the [desktop quickstart](docs/quickstart.md) for a guided batch export.
 
-The editor has **Frame** and **Refine** tabs. **Preview / Crop** shows the source
-with the crop frame. The completed photo preview appears inside that frame. Drag
-the frame or use the arrow keys. **Result** shows the decoded output for the
-current photo using its current settings. It does not change to reflect output
+The editor has **Frame** and **Refine** tabs. **Preview / Crop** shows the full
+oriented source with a crop outline. Drag the outline or use the arrow keys.
+**Result** shows the decoded output for the current photo using its current
+settings. It does not change to reflect output
 size or style edits made in **Export as…**. Those choices customize the export
 without changing the photo’s editor settings. In a batch, **Result** is the
 current photo’s preview, not a preview of every queued photo.
@@ -200,10 +200,8 @@ cancellation leaves the existing destination intact. A successful ZIP contains
   sessions preserve the selected zoom. Older sessions with a manual crop use that
   saved frame as their 100% baseline.
 
-The completed current-photo preview appears inside the crop in **Preview / Crop**,
-with the source dimmed outside. **Result** shows the decoded output. It shows
-**Updating…** while processing. Mouse-driven sliders and crop dragging process on
-release. **Refresh preview** explicitly recomputes the current settings.
+**Result** shows **Updating…** while processing. Mouse-driven sliders and crop
+dragging process on release. **Refresh preview** recomputes the current settings.
 
 The three embedded sample portraits use the same local face detection and
 background removal as imported photos. They are copied to the app cache. Repeated

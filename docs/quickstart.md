@@ -14,9 +14,10 @@ or follow the [build instructions](BUILDING.md). The desktop launcher is named
    the inspector with the sliders icon if it is hidden. Its tabs are **Frame** and
    **Refine**. In **Frame**, adjust **Headroom** and **Crop zoom**, drag the crop,
    or focus the crop and use the arrow keys. Lower crop zoom values show more of
-   the source.
-3. **Preview / Crop** shows the source and crop frame, with the finished preview
-   inside the crop. **Result** shows the decoded output for the open photo using
+   the source. Drag the dividers between panels to change their widths, or focus
+   a divider with **Tab** and use **Left** or **Right**.
+3. **Preview / Crop** shows the full oriented source and an editable crop outline.
+   **Result** shows the decoded output for the open photo using
    that photo’s current settings. Changes made in **Export as…** do not change this
    editor preview. In **Refine**, choose **Fast · portrait**, **High Quality ·
    portrait**, or **Off · keep original** under **Background removal**. With
@@ -88,6 +89,7 @@ destination unchanged.
 | --- | --- |
 | **Tab** / **Shift+Tab** | Move focus through controls |
 | **Arrow keys** in Preview / Crop | Move the focused crop frame |
+| **Left** / **Right** on a focused divider | Resize adjacent panels |
 | **Alt+Left** / **Alt+Right** | Open the previous or next photo in the filter |
 | **Alt+Shift+R** | Open the next other photo needing review across the queue |
 | **Ctrl+Return** | Refresh the preview |

@@ -39,13 +39,13 @@ separate tabs in the inspector. Open Frame initially and keep the chosen tab
 when moving between photos. Place encoding and sizing in **Export as…**.
 Dense regions scroll independently. Minimum window size is 1024 × 720.
 
-Output previews are decoded from the actual JPEG/PNG bytes. The left pane shows
-the finished export inside the editable crop, over a dimmed
-full source. The right pane shows the encoded result while the user applies
-Keep or Remove brush strokes in crop coordinates. Both panes share one completed
-preview revision. Mark pending work as Updating.
-Use a checkerboard behind transparent pixels. Keyboard navigation, tool labels,
-visible focus, and non-drag crop zoom controls remain available. Crop zoom is
+The left pane shows the full oriented source with a single editable crop outline.
+Use a light stroke and a dark keyline, with an accent stroke on keyboard focus.
+Show the source and outline when they are ready for the current photo. The right
+pane shows output decoded from the actual JPEG/PNG bytes. Apply Keep or Remove
+brush strokes there in crop coordinates. Mark pending work as Updating.
+Use a checkerboard behind transparent Result pixels. Keep keyboard navigation,
+tool labels, visible focus, and non-drag crop zoom controls. Crop zoom is
 relative to each photo’s automatic frame, from 40–100%: 100% is the automatic
 crop, and lower percentages widen it. Preserve the requested headroom fraction
 while zooming where source space permits. Headroom changes recalculate automatic
