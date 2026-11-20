@@ -13,10 +13,37 @@
 #include <QSettings>
 #include <QStandardPaths>
 #include <QStyleHints>
+#include <QTemporaryFile>
 #include <QtConcurrent>
 #include <algorithm>
 
 using namespace gibbon;
+static QVariantMap outputStyle(const Settings &settings) {
+    return {{"format", settings.format}, {"quality", settings.quality},
+            {"backgroundColor", settings.backgroundColor.name()}, {"capped", settings.capped},
+            {"width", settings.width}, {"height", settings.height}, {"prefix", settings.prefix},
+            {"sharpenScreen", settings.sharpenScreen}, {"sharpening", settings.sharpening}};
+}
+static Settings readOutputStyle(const QVariantMap &style) {
+    auto fields = outputStyle(Settings{});
+    for (auto field = fields.begin(); field != fields.end(); ++field) {
+        auto value = style.constFind(field.key());
+        if (value != style.constEnd())
+            field.value() = value.value();
+    }
+    return Settings::fromJson(QJsonObject::fromVariantMap(fields));
+}
+static void applyOutputStyle(Settings &settings, const Settings &style) {
+    settings.format = style.format;
+    settings.quality = style.quality;
+    settings.backgroundColor = style.backgroundColor;
+    settings.capped = style.capped;
+    settings.width = style.width;
+    settings.height = style.height;
+    settings.prefix = style.prefix;
+    settings.sharpenScreen = style.sharpenScreen;
+    settings.sharpening = style.sharpening;
+}
 static QString thumbnailKey(const QString &path) {
     return "thumb" +
            QString::fromLatin1(
@@ -43,6 +70,7 @@ Controller::Controller(ImageStore *store, QObject *parent, const QString &recove
     progressTimer.setInterval(100);
     connect(&progressTimer, &QTimer::timeout, this, &Controller::progressChanged);
     pool.setMaxThreadCount(1);
+    exportHistory = QSettings().value("exportHistory").toMap();
     if (QSettings().value("processingDevice").toString() == "cpu") devicePreference = "cpu";
     engine.setDevice(devicePreference);
     const int savedScale = QSettings().value("uiScale", 100).toInt();
@@ -164,6 +192,7 @@ QVariantMap Controller::settings() const {
 void Controller::setCurrent(int i) {
     if (working || i < 0 || i >= queue.size() || i == index)
         return;
+    presetOutputPending = false;
     index = i;
     details.clear();
     emit changed();
@@ -354,6 +383,7 @@ void Controller::stroke(const QVariantList &points, bool keep, double radius) {
 void Controller::undo() {
     if (working || index < 0 || queue[index].history.empty())
         return;
+    presetOutputPending = false;
     queue[index].settings = queue[index].history.takeLast();
     emit changed();
     preview();
@@ -361,6 +391,7 @@ void Controller::undo() {
 void Controller::reset() {
     if (working || index < 0)
         return;
+    presetOutputPending = false;
     remember();
     queue[index].settings = Settings{};
     emit changed();
@@ -406,6 +437,7 @@ void Controller::removeSelected() {
     for (int i = queue.size() - 1; i >= 0; --i)
         if (queue[i].selected)
             queue.removeAt(i);
+    presetOutputPending = false;
     index = queue.empty() ? -1 : 0;
     if (queue.empty()) importDefaults = Settings{};
     details.clear();
@@ -496,7 +528,7 @@ void Controller::preview() {
         if (work.error.isEmpty()) {
             showResult(work.result, row);
             status = work.result.review ? "Review suggested · adjust the crop or approve it"
-                                        : "Preview ready · matches encoded export";
+                                        : "Photo preview ready";
         } else {
             queue[row].state = "Failed";
             queue[row].error = work.error;
@@ -518,6 +550,13 @@ void Controller::preview() {
 void Controller::batch(const QUrl &dir, bool exportFiles) {
     if (working)
         return;
+    if (exportFiles) {
+        auto options = exportOptions(false);
+        options["scope"] = "checked";
+        options["mixed"] = true;
+        startExportRequest(options, dir, false, true);
+        return;
+    }
     QVector<int> rows;
     for (int i = 0; i < queue.size(); ++i)
         if (queue[i].selected)
@@ -526,54 +565,208 @@ void Controller::batch(const QUrl &dir, bool exportFiles) {
         fail("Select photos in the queue first");
         return;
     }
-    processMany(rows, dir.toLocalFile(), exportFiles);
+    processMany(rows);
 }
 void Controller::exportCurrent(const QUrl &dir) {
-    if (index >= 0)
-        processMany({index}, dir.toLocalFile(), true);
+    if (index < 0) return;
+    auto options = exportOptions(false);
+    options["scope"] = "current";
+    startExportRequest(options, dir, false, true);
 }
 void Controller::exportZip(const QUrl &destination) {
-    if (working) return;
-    const auto path = destination.toLocalFile();
-    if (!checkSaveDestination(path)) return;
-    QVector<int> rows;
-    for (int i = 0; i < queue.size(); ++i) rows << i;
-    processMany(rows, path, true, true);
+    auto options = exportOptions(false);
+    options["scope"] = "zip";
+    options["mixed"] = true;
+    startExport(options, destination, true);
 }
-void Controller::processMany(QVector<int> rows, QString directory, bool exportFiles, bool zip) {
+QString Controller::quickExportScope() const {
+    const auto scope = exportHistory.value("scope").toString();
+    if (scope == "current")
+        return "Current photo";
+    if (scope == "checked")
+        return QString("%1 checked").arg(selectedCount());
+    if (scope == "zip")
+        return "Queue ZIP";
+    return {};
+}
+QString Controller::quickExportDescription() const {
+    if (exportHistory.isEmpty())
+        return "Choose output settings and a destination for your first export.";
+    const auto options = exportOptions(true);
+    const auto notice = options.value("notice").toString();
+    const auto scope = options.value("scope").toString();
+    const auto target = scope == "zip" ? "the whole queue to a ZIP" :
+                        scope == "checked" ? "checked photos, including any hidden by the filter" :
+                        "the current photo";
+    const auto path = QDir::toNativeSeparators(exportHistory.value("destination").toString());
+    return QString("Export %1. %2%3").arg(target, path, notice.isEmpty() ? "" : "\n" + notice);
+}
+QVariantMap Controller::exportOptions(bool quick) const {
+    const bool firstBatch = exportHistory.isEmpty() && selectedCount() > 1;
+    auto scope = firstBatch ? QString("checked") :
+        quick && !exportHistory.isEmpty() ? exportHistory.value("scope").toString() : QString("current");
+    const auto rememberedStyle = exportHistory.value("style").toMap();
+    const auto path = exportHistory.value("destination").toString();
+    const QFileInfo destination(path);
+    const QFileInfo zipParent(destination.absolutePath());
+    const auto folder = exportHistory.value("folder").toString();
+    QVariantMap style = outputStyle(index >= 0 ? queue[index].settings : importDefaults);
+    bool mixed = firstBatch;
+    QString reason;
+    if (quick && !exportHistory.isEmpty()) {
+        mixed = exportHistory.value("mixed").toBool();
+        if (!mixed && !presetOutputPending && !rememberedStyle.isEmpty() &&
+            exportStyleError(rememberedStyle).isEmpty())
+            style = rememberedStyle;
+        if (scope == "checked" && selectedCount() == 0)
+            reason = "Check photos or choose another scope.";
+        else if (scope == "zip" && (destination.exists() || destination.isSymLink()))
+            reason = "Choose a ZIP destination. The previous archive already exists.";
+        else if (scope == "zip" && (!zipParent.isDir() || !zipParent.isWritable()))
+            reason = "The previous ZIP folder is no longer available.";
+        else if ((scope == "checked" || scope == "current") && (!destination.isDir() || !destination.isWritable()))
+            reason = "The previous export folder is no longer available.";
+    }
+    if (scope != "checked" && scope != "zip") scope = "current";
+    return {{"scope", scope}, {"style", style}, {"mixed", mixed}, {"notice", reason},
+            {"folder", QFileInfo(folder).isDir() ? QUrl::fromLocalFile(folder) : QUrl{}},
+            {"zipFile", exportHistory.value("scope").toString() == "zip" && zipParent.isDir() ?
+                            QUrl::fromLocalFile(path) : QUrl{}}};
+}
+QString Controller::exportStyleError(const QVariantMap &style) const {
+    try {
+        readOutputStyle(style);
+        return {};
+    } catch (const std::exception &e) {
+        return errorText(e);
+    }
+}
+bool Controller::archiveExists(const QUrl &destination) const {
+    const QFileInfo info(destination.toLocalFile());
+    return info.exists() || info.isSymLink();
+}
+bool Controller::quickExport() {
+    if (working || index < 0 || exportHistory.isEmpty())
+        return false;
+    const auto options = exportOptions(true);
+    if (!options.value("notice").toString().isEmpty())
+        return false;
+    return startExport(options, QUrl::fromLocalFile(exportHistory.value("destination").toString()));
+}
+bool Controller::startExport(const QVariantMap &options, const QUrl &destination, bool replaceArchive) {
+    return startExportRequest(options, destination, replaceArchive, false);
+}
+bool Controller::startExportRequest(const QVariantMap &options, const QUrl &destination,
+                                    bool replaceArchive, bool createFolder) {
+    if (working || recoveryOffered || index < 0)
+        return false;
+    const auto scope = options.value("scope").toString();
+    const bool zip = scope == "zip";
+    QVector<int> rows;
+    if (scope == "current")
+        rows << index;
+    else if (scope == "checked" || zip) {
+        for (int i = 0; i < queue.size(); ++i)
+            if (zip || queue[i].selected) rows << i;
+    }
+    if (rows.isEmpty()) {
+        fail("Select photos in the queue first");
+        return false;
+    }
+    const auto path = destination.toLocalFile();
+    const QFileInfo info(path);
+    const bool available = zip ? QFileInfo(info.absolutePath()).isDir() :
+        info.isDir() || (createFolder && !info.exists() && !info.isSymLink());
+    if (path.isEmpty() || !available) {
+        fail(zip ? "Choose a ZIP destination in an existing folder" : "Choose an existing output folder");
+        return false;
+    }
+    if (zip) {
+        if (!checkSaveDestination(path))
+            return false;
+        if (info.isDir() || (!replaceArchive && (info.exists() || info.isSymLink()))) {
+            fail("Choose another ZIP destination");
+            return false;
+        }
+    }
+    const bool mixed = scope != "current" && options.value("mixed").toBool();
+    QVariantMap style;
+    try {
+        style = mixed ? outputStyle(queue[index].settings) :
+                        outputStyle(readOutputStyle(options.value("style").toMap()));
+    } catch (const std::exception &e) {
+        fail(errorText(e));
+        return false;
+    }
+    QVariantMap request = {{"scope", scope}, {"mixed", mixed}, {"style", style},
+                           {"destination", info.absoluteFilePath()},
+                           {"folder", zip ? exportHistory.value("folder") : info.absoluteFilePath()}};
+    processMany(rows, request, replaceArchive, createFolder);
+    return true;
+}
+void Controller::processMany(QVector<int> rows, const QVariantMap &exportRequest, bool replaceArchive,
+                             bool createFolder) {
     if (working || rows.empty())
         return;
-    if (exportFiles && directory.isEmpty()) {
-        fail(zip ? "Choose a ZIP destination" : "Choose an output folder");
-        return;
-    }
     const bool needsQuality = std::any_of(rows.cbegin(), rows.cend(), [this](int row) {
         return queue[row].settings.background == "quality";
     });
-    if (!allowHighQuality(needsQuality, [this, rows, directory, exportFiles, zip] {
-            processMany(rows, directory, exportFiles, zip);
+    if (!allowHighQuality(needsQuality, [=, this] {
+            processMany(rows, exportRequest, replaceArchive, createFolder);
         }))
         return;
+    const bool exportFiles = !exportRequest.isEmpty();
+    const auto scope = exportRequest.value("scope").toString();
+    const bool zip = scope == "zip";
+    const auto directory = exportRequest.value("destination").toString();
     working = true;
     cancelled = false;
     auto snapshot = queue;
+    const int unpreviewedRow = details.isEmpty() ? index : -1;
     beginProgress();
     const auto token = operation;
-    status = zip ? "Exporting every queued photo to ZIP…" : "Processing selected photos…";
+    status = zip ? "Exporting every queued photo to ZIP…" :
+             scope == "current" ? "Exporting current photo…" :
+             exportFiles ? "Exporting checked photos…" : "Preparing checked photos…";
     emit changed();
-    auto *w = new QFutureWatcher<QString>(this);
-    connect(w, &QFutureWatcher<QString>::finished, this, [this, w] {
+    struct Work {
+        QString message;
+        bool exported = false;
+    };
+    auto *w = new QFutureWatcher<Work>(this);
+    connect(w, &QFutureWatcher<Work>::finished, this, [this, w, exportRequest] {
         working = false;
         endProgress();
-        status = w->result();
+        const auto result = w->result();
+        status = result.message;
+        if (result.exported && !exportRequest.isEmpty()) {
+            exportHistory = exportRequest;
+            QSettings().setValue("exportHistory", exportHistory);
+            presetOutputPending = false;
+        }
         qualityConsent = false;
         w->deleteLater();
         emit changed();
     });
-    w->setFuture(QtConcurrent::run(&pool, [this, rows, snapshot, directory, exportFiles, token, zip]() -> QString {
+    w->setFuture(QtConcurrent::run(&pool, [=, this]() -> Work {
       try {
+        const bool sharedStyle = !exportRequest.isEmpty() && !exportRequest.value("mixed").toBool();
+        const auto style = exportRequest.value("style").toMap();
+        const auto sharedSettings = readOutputStyle(style);
+        if (exportFiles && !zip && !createFolder && !QFileInfo(directory).isDir())
+            throw std::runtime_error("The chosen output folder is no longer available");
+        QTemporaryFile stagedArchive;
         std::unique_ptr<ZipExport> archive;
-        if (zip) archive = std::make_unique<ZipExport>(directory, &cancelled);
+        if (zip) {
+            if (!replaceArchive) {
+                // Publish a new archive without replacing a path created during processing.
+                stagedArchive.setFileTemplate(QFileInfo(directory).absoluteDir().filePath(".gibbon-XXXXXX"));
+                if (!stagedArchive.open())
+                    throw std::runtime_error(stagedArchive.errorString().toStdString());
+                stagedArchive.close();
+            }
+            archive = std::make_unique<ZipExport>(replaceArchive ? directory : stagedArchive.fileName(), &cancelled);
+        }
         int done = 0, held = 0, failed = 0;
         QJsonArray report;
         int photo = 0;
@@ -583,14 +776,17 @@ void Controller::processMany(QVector<int> rows, QString directory, bool exportFi
                 break;
             const auto &q = snapshot[row];
             try {
-                auto r = engine.process(q.path, q.settings, &cancelled, progressCallback(token, photo, rows.size()));
+                auto settings = q.settings;
+                const bool matchesPreview = !sharedStyle || style == outputStyle(settings);
+                if (sharedStyle) applyOutputStyle(settings, sharedSettings);
+                auto r = engine.process(q.path, settings, &cancelled, progressCallback(token, photo, rows.size()));
                 QString output;
                 if (r.review)
                     ++held;
                 else {
                     if (exportFiles)
-                        output = zip ? archive->addPhoto(q.path, q.settings.prefix, q.settings.format, r.encoded)
-                                     : Engine::save(r, q.path, directory, q.settings);
+                        output = zip ? archive->addPhoto(q.path, settings.prefix, settings.format, r.encoded)
+                                     : Engine::save(r, q.path, directory, settings, createFolder);
                     ++done;
                 }
                 report.append(QJsonObject{{"source", q.path},
@@ -600,14 +796,37 @@ void Controller::processMany(QVector<int> rows, QString directory, bool exportFi
                                                                    : "ready"},
                                           {"warnings", QJsonArray::fromStringList(r.warnings)},
                                           {"diagnostics", r.diagnostics()}});
+                bool showPreview = matchesPreview;
+                if (!matchesPreview && row == unpreviewedRow && !cancelled) {
+                    // An export can finish preparation for a photo whose initial preview
+                    // was cancelled. Render its editor settings so framing can be reviewed.
+                    try {
+                        r = engine.process(q.path, q.settings, &cancelled,
+                                           progressCallback(token, photo, rows.size()));
+                        showPreview = true;
+                    } catch (const std::exception &) {
+                        // The file or review result above is still valid.
+                    }
+                }
                 r.encoded.clear();
                 r.preview =
                     r.preview.scaled(1400, 1400, Qt::KeepAspectRatio, Qt::SmoothTransformation);
                 QMetaObject::invokeMethod(
                     this,
-                    [this, r, row, output, token, zip] {
+                    [this, r, row, output, token, zip, showPreview] {
                         if (token != operation) return;
-                        showResult(r, row);
+                        if (showPreview)
+                            showResult(r, row);
+                        else {
+                            auto &item = queue[row];
+                            item.error.clear();
+                            item.warnings = r.warnings;
+                            item.state = r.review ? "Needs review" : "Ready";
+                            if (row == index && !details.isEmpty()) {
+                                details["review"] = r.review;
+                                details["warnings"] = r.warnings.join(" · ");
+                            }
+                        }
                         if (!zip && !output.isEmpty())
                             queue[row].state = "Exported";
                         status = QString("Processed %1").arg(QFileInfo(queue[row].path).fileName());
@@ -634,39 +853,46 @@ void Controller::processMany(QVector<int> rows, QString directory, bool exportFi
         }
         if (zip) {
             if (cancelled || held || failed)
-                return QString("ZIP not saved · %1 need review · %2 failed%3 · destination unchanged")
-                    .arg(held).arg(failed).arg(cancelled ? " · cancelled" : "");
+                return {QString("ZIP not saved · %1 need review · %2 failed%3 · destination unchanged")
+                    .arg(held).arg(failed).arg(cancelled ? " · cancelled" : "")};
             progressCallback(token, rows.size(), rows.size())({"Writing ZIP", "Finalizing archive"});
             archive->commit(QJsonDocument(report).toJson());
+            if (!replaceArchive && (cancelled || !QFile::rename(stagedArchive.fileName(), directory)))
+                throw std::runtime_error(cancelled ? "Cancelled" : "Could not save ZIP to the chosen destination");
             QMetaObject::invokeMethod(this, [this, rows, token] {
                 if (token != operation) return;
                 for (int row : rows) queue[row].state = "Exported";
                 emit changed();
             }, Qt::QueuedConnection);
-            return QString("ZIP saved · %1 photos · %2").arg(done).arg(directory);
+            return {QString("ZIP saved · %1 photos · %2").arg(done).arg(directory), true};
         }
         if (exportFiles) {
             QString reportError;
-            QDir().mkpath(directory);
+            if (createFolder) QDir().mkpath(directory);
             QString stamp = QString::number(QDateTime::currentMSecsSinceEpoch());
             QFile f(QDir(directory).filePath("gibbon-report-" + stamp + ".json"));
-            if (!f.open(QIODevice::WriteOnly | QIODevice::NewOnly) ||
-                f.write(QJsonDocument(report).toJson()) < 0)
+            const auto reportBytes = QJsonDocument(report).toJson();
+            if (!f.open(QIODevice::WriteOnly | QIODevice::NewOnly)) {
                 reportError = " · report could not be written";
-            return QString("%1 complete · %2 need review · %3 failed%4%5")
+            } else if (f.write(reportBytes) != reportBytes.size() || !f.flush()) {
+                f.close();
+                f.remove();
+                reportError = " · report could not be written";
+            }
+            return {QString("%1 complete · %2 need review · %3 failed%4%5")
                 .arg(done)
                 .arg(held)
                 .arg(failed)
                 .arg(cancelled ? " · cancelled" : "")
-                .arg(reportError);
+                .arg(reportError), done == rows.size() && !cancelled && reportError.isEmpty()};
         }
-        return QString("%1 ready · %2 need review · %3 failed%4")
+        return {QString("%1 ready · %2 need review · %3 failed%4")
             .arg(done)
             .arg(held)
             .arg(failed)
-            .arg(cancelled ? " · cancelled" : "");
+            .arg(cancelled ? " · cancelled" : "")};
       } catch (const std::exception &e) {
-        return QString("Export failed · %1 · destination unchanged").arg(errorText(e));
+        return {QString("Export failed · %1 · destination unchanged").arg(errorText(e))};
       }
     }));
 }
@@ -739,6 +965,7 @@ void Controller::loadSession(const QUrl &u) {
         }
         queue = loaded;
         importDefaults = defaults;
+        presetOutputPending = false;
         index = queue.empty() ? -1 : 0;
         details.clear();
         emit changed();
@@ -748,11 +975,16 @@ void Controller::loadSession(const QUrl &u) {
     }
 }
 void Controller::savePreset(const QUrl &u) {
+    saveExportPreset(u, {});
+}
+void Controller::saveExportPreset(const QUrl &u, const QVariantMap &style) {
     const auto path = u.toLocalFile();
-    if (index < 0 || !checkSaveDestination(path))
+    if (working || index < 0 || !checkSaveDestination(path))
         return;
     try {
         auto s = queue[index].settings;
+        if (!style.isEmpty())
+            applyOutputStyle(s, readOutputStyle(style));
         s.crop = {};
         s.cropBasis = {};
         s.strokes = {};
@@ -770,7 +1002,9 @@ void Controller::loadPreset(const QUrl &u) {
         return;
     try {
         auto s = Settings::fromJson(readJson(u));
+        presetOutputPending = true;
         remember();
+        s.approved = false;
         queue[index].settings = s;
         emit changed();
         preview();

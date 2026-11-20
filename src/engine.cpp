@@ -554,15 +554,18 @@ Result Engine::process(const QString &path, const Settings &s, std::atomic_bool 
     return r;
 }
 QString Engine::save(const Result &r, const QString &source, const QString &directory,
-                     const Settings &s) {
+                     const Settings &s, bool createDirectory) {
     if (r.review)
         throw std::runtime_error("Photo needs review before export");
-    if (!QDir().mkpath(directory))
+    if (createDirectory && !QDir().mkpath(directory))
         throw std::runtime_error("Cannot create output directory");
+    const QDir target(directory);
+    if (!target.exists())
+        throw std::runtime_error("The chosen output folder is no longer available");
     QString stem = s.prefix + QFileInfo(source).completeBaseName() + "-pfp",
             extension = s.format == "jpeg" ? "jpg" : "png";
     for (int suffix = 0; suffix < 100000; ++suffix) {
-        QString path = QDir(directory).filePath(
+        QString path = target.filePath(
             stem + (suffix ? "-" + QString::number(suffix) : QString()) + "." + extension);
         QFile file(path);
         if (!file.open(QIODevice::WriteOnly | QIODevice::NewOnly)) {

@@ -46,7 +46,7 @@ class Engine {
     static double tone(double lightness, double amount);
     static cv::Vec3f adjust(const cv::Vec3f &rgb, double amount);
     static QString save(const Result &result, const QString &source, const QString &directory,
-                        const Settings &settings);
+                        const Settings &settings, bool createDirectory = true);
 
   private:
     Models models;

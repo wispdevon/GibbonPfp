@@ -28,6 +28,8 @@ class Controller : public QObject {
     Q_PROPERTY(QString autosaveError READ autosaveError NOTIFY recoveryChanged)
     Q_PROPERTY(QVariantList items READ items NOTIFY changed)
     Q_PROPERTY(int selectedCount READ selectedCount NOTIFY changed)
+    Q_PROPERTY(QString quickExportScope READ quickExportScope NOTIFY changed)
+    Q_PROPERTY(QString quickExportDescription READ quickExportDescription NOTIFY changed)
     Q_PROPERTY(QVariantMap settings READ settings NOTIFY changed)
     Q_PROPERTY(QVariantMap result READ result NOTIFY changed)
     Q_PROPERTY(int current READ current WRITE setCurrent NOTIFY changed)
@@ -116,10 +118,19 @@ class Controller : public QObject {
     Q_INVOKABLE void batch(const QUrl &directory, bool exportFiles);
     Q_INVOKABLE void exportZip(const QUrl &destination);
     Q_INVOKABLE void exportCurrent(const QUrl &directory);
+    QString quickExportScope() const;
+    QString quickExportDescription() const;
+    Q_INVOKABLE QVariantMap exportOptions(bool quick) const;
+    Q_INVOKABLE QString exportStyleError(const QVariantMap &style) const;
+    Q_INVOKABLE bool archiveExists(const QUrl &destination) const;
+    Q_INVOKABLE bool quickExport();
+    Q_INVOKABLE bool startExport(const QVariantMap &options, const QUrl &destination,
+                                 bool replaceArchive = false);
     Q_INVOKABLE void cancel();
     Q_INVOKABLE void saveSession(const QUrl &url);
     Q_INVOKABLE void loadSession(const QUrl &url);
     Q_INVOKABLE void savePreset(const QUrl &url);
+    Q_INVOKABLE void saveExportPreset(const QUrl &url, const QVariantMap &style);
     Q_INVOKABLE void loadPreset(const QUrl &url);
     Q_INVOKABLE QString modelDescription() const;
     Q_INVOKABLE void installModel(const QString &id);
@@ -168,6 +179,8 @@ class Controller : public QObject {
     friend class ControllerTests;
     QVector<Item> queue;
     gibbon::Settings importDefaults;
+    QVariantMap exportHistory;
+    bool presetOutputPending = false;
     int index = -1, generation = 0;
     int interfaceScale = 100;
     QString accentName = "graphite";
@@ -185,6 +198,9 @@ class Controller : public QObject {
     void remember();
     void fail(const QString &error);
     bool checkSaveDestination(const QString &destination);
+    bool startExportRequest(const QVariantMap &options, const QUrl &destination,
+                            bool replaceArchive, bool createFolder);
     void showResult(const gibbon::Result &r, int row);
-    void processMany(QVector<int> rows, QString directory, bool exportFiles, bool zip = false);
+    void processMany(QVector<int> rows, const QVariantMap &exportRequest = {}, bool replaceArchive = false,
+                     bool createFolder = false);
 };
