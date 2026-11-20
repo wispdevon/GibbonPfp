@@ -20,6 +20,9 @@ Give dropdown values and option labels 12 logical pixels of horizontal padding.
 Separate the value from the indicator by at least 4 pixels and inset the indicator
 12 pixels from the trailing edge. Option rows use the popup viewport width and
 are at least 32 pixels high. Elide long labels within the available width.
+Align action menus with the trailing edge of their button and open them above
+when space below is limited. Check the open menu at the minimum window size
+and maximum UI scale so every command, including its checkmark, fits on screen.
 
 ## Work surface
 

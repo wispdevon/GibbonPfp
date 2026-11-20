@@ -829,6 +829,96 @@ class ControllerTests : public QObject {
         QSettings().clear();
     }
 
+    void actionMenusStayInsideWorkspace() {
+        QQmlApplicationEngine qml;
+        auto *images = new ImageStore;
+        qml.addImageProvider("photos", images);
+        Controller c(images, nullptr, {}, false);
+        qml.rootContext()->setContextProperty("backend", &c);
+        qml.load(QUrl::fromLocalFile(GIBBON_SOURCE_DIR "/qml/Main.qml"));
+        QVERIFY(!qml.rootObjects().isEmpty());
+        auto *window = qobject_cast<QQuickWindow *>(qml.rootObjects().front());
+        QVERIFY(window);
+        QScopeGuard deleteWindow([&] { qDeleteAll(qml.rootObjects()); });
+        window->requestActivate();
+        QTRY_VERIFY(window->isActive());
+        c.loadSample();
+        QTRY_VERIFY_WITH_TIMEOUT(!c.busy(), 15000);
+
+        const auto captures = qEnvironmentVariable("GIBBON_TEST_SCREENSHOTS");
+        if (!captures.isEmpty())
+            QVERIFY(QDir().mkpath(captures));
+        const QList<QPair<QSize, int>> cases = {
+            {QSize(1024, 720), 150}, {QSize(1024, 720), 100}, {QSize(1440, 900), 100}
+        };
+        struct MenuCase {
+            const char *button;
+            const char *menu;
+            bool above;
+        };
+        const MenuCase menus[] = {
+            {"workspaceActions", "workspaceMenu", false},
+            {"queueActions", "queueMenu", false},
+            {"photoActions", "photoMenu", true}
+        };
+        for (const auto &[size, scale] : cases) {
+            window->resize(size);
+            c.setUiScale(scale);
+            QTest::qWait(100);
+            window->setProperty("adjustmentsOpen", size.width() * 100 / scale >= 1100);
+            window->setProperty("queueOpen", true);
+            QTest::qWait(100);
+            for (const auto &[button, menuName, above] : menus) {
+                auto *trigger = window->findChild<QQuickItem *>(button);
+                auto *menu = window->findChild<QObject *>(menuName);
+                QVERIFY(trigger && trigger->isVisible() && menu);
+                trigger->forceActiveFocus(Qt::TabFocusReason);
+                QTest::keyClick(window, Qt::Key_Space);
+                QTRY_VERIFY(menu->property("opened").toBool());
+
+                const auto *background = menu->property("background").value<QQuickItem *>();
+                QVERIFY(background);
+                const QRectF bounds = background->mapRectToScene(background->boundingRect());
+                const auto geometry = QString("%1: bounds %2,%3 %4×%5 at %6×%7/%8%")
+                    .arg(menuName).arg(bounds.x()).arg(bounds.y()).arg(bounds.width()).arg(bounds.height())
+                    .arg(size.width()).arg(size.height()).arg(scale);
+                QVERIFY2(QRectF(QPointF{}, QSizeF(size)).contains(bounds), qPrintable(geometry));
+                const QRectF anchor = trigger->mapRectToScene(trigger->boundingRect());
+                QVERIFY2(qAbs(bounds.right() - anchor.right()) <= 2., qPrintable(geometry));
+                QVERIFY2(above ? bounds.bottom() <= anchor.top() : bounds.top() >= anchor.bottom(),
+                         qPrintable(geometry));
+
+                const auto count = menu->property("count").toInt();
+                QVERIFY(count > 0);
+                for (int row = 0; row < count; ++row) {
+                    QQuickItem *item = nullptr;
+                    QVERIFY(QMetaObject::invokeMethod(menu, "itemAt", Q_RETURN_ARG(QQuickItem *, item), Q_ARG(int, row)));
+                    if (!item || item->property("text").toString().isEmpty())
+                        continue;
+                    QCOMPARE(item->property("leftPadding").toReal(), 12.);
+                    QCOMPARE(item->property("rightPadding").toReal(), 12.);
+                    QVERIFY(item->height() >= 32.);
+                    const auto *label = item->property("contentItem").value<QQuickItem *>();
+                    QVERIFY(label && label->implicitWidth() <= label->width() + 1.);
+                    if (item->property("checkable").toBool()) {
+                        const auto *indicator = item->property("indicator").value<QQuickItem *>();
+                        QVERIFY(indicator && indicator->x() >= 12.);
+                    }
+                }
+                if (!captures.isEmpty()) {
+                    const auto path = QString("%1/%2-%3x%4-%5.png").arg(captures, menuName)
+                                          .arg(size.width()).arg(size.height()).arg(scale);
+                    QVERIFY(window->grabWindow().save(path));
+                }
+                QTest::keyClick(window, Qt::Key_Down);
+                QTRY_VERIFY(menu->property("currentIndex").toInt() >= 0);
+                QTest::keyClick(window, Qt::Key_Escape);
+                QTRY_VERIFY(!menu->property("visible").toBool());
+                QTRY_VERIFY(trigger->hasActiveFocus());
+            }
+        }
+    }
+
     void queueControlsAndApplyConfirmation() {
         QQmlApplicationEngine qml;
         auto *images = new ImageStore;

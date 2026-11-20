@@ -72,7 +72,48 @@ ApplicationWindow {
 
     component WorkLabel: Label { font.family: "Inter"; font.weight: Font.Medium }
     component WorkCheckBox: CheckBox { font.family: "Inter"; font.weight: Font.Medium }
-    component WorkMenuItem: MenuItem { font.family: "Inter"; font.weight: Font.Medium }
+    component WorkMenuItem: MenuItem {
+        font.family: "Inter"; font.weight: Font.Medium
+        horizontalPadding: 12
+        implicitHeight: Math.max(32, Math.max(implicitContentHeight, implicitIndicatorHeight)
+                                 + topPadding + bottomPadding)
+    }
+    component WorkMenu: Menu {
+        id: menu
+        required property Item trigger
+        readonly property int edge: 4
+        property rect triggerBounds
+        function updateAnchor() {
+            triggerBounds = trigger.mapToItem(parent, Qt.rect(0, 0, trigger.width, trigger.height))
+        }
+        parent: Overlay.overlay
+        popupType: Popup.Item
+        // The overlay shares the workspace transform, so fit the menu in logical workspace units.
+        margins: -1
+        width: {
+            let naturalWidth = implicitWidth
+            for (let row = 0; row < count; ++row) {
+                const item = itemAt(row)
+                if (item)
+                    naturalWidth = Math.max(naturalWidth, item.implicitWidth + leftPadding + rightPadding)
+            }
+            return Math.min(naturalWidth, workspace.width - 2 * edge)
+        }
+        height: Math.min(implicitHeight, workspace.height - 2 * edge)
+        x: Math.max(edge, Math.min(triggerBounds.x + triggerBounds.width - width, workspace.width - width - edge))
+        y: {
+            const below = triggerBounds.y + triggerBounds.height + edge
+            const above = triggerBounds.y - height - edge
+            const preferred = below + height <= workspace.height - edge ? below : above
+            return Math.max(edge, Math.min(preferred, workspace.height - height - edge))
+        }
+        onAboutToShow: updateAnchor()
+        Connections {
+            target: workspace
+            function onWidthChanged() { if (menu.visible) Qt.callLater(menu.updateAnchor) }
+            function onHeightChanged() { if (menu.visible) Qt.callLater(menu.updateAnchor) }
+        }
+    }
     component WorkDialog: Dialog {
         id: workDialog
         font.family: "Inter"; font.weight: Font.Medium
@@ -240,10 +281,11 @@ ApplicationWindow {
                     onClicked: {adjustmentsOpen=checked;if(adjustmentsOpen&&workspace.width<1100)queueOpen=false}
                 }
                 Command {
+                    id: workspaceActions
                     objectName: "workspaceActions"; text: "Workspace actions"; symbol: "more"; iconOnly: true; quiet: true
-                    onClicked: workspaceMenu.popup(0, height)
-                    Menu {
-                        id: workspaceMenu
+                    onClicked: workspaceMenu.open()
+                    WorkMenu {
+                        id: workspaceMenu; objectName: "workspaceMenu"; trigger: workspaceActions
                         WorkMenuItem { text: "Open session…"; enabled: !backend.busy; onTriggered: {fileAction="loadSession";jsonOpen.open()} }
                         WorkMenuItem { text: "Save session…"; enabled: hasPhoto&&!backend.busy; onTriggered: {fileAction="saveSession";jsonSave.open()} }
                         MenuSeparator {}
@@ -277,10 +319,11 @@ ApplicationWindow {
                         Layout.fillWidth: true
                         Choice { objectName: "queueFilter"; Layout.fillWidth: true; model: ["All photos", "Needs review", "Ready", "Failed", "Exported"]; onActivated: win.filter=currentText }
                         Command {
+                            id: queueActions
                             objectName: "queueActions"; text: "Queue actions"; symbol: "more"; iconOnly: true; quiet: true
-                            onClicked: queueMenu.popup(0, height)
-                            Menu {
-                                id: queueMenu
+                            onClicked: queueMenu.open()
+                            WorkMenu {
+                                id: queueMenu; objectName: "queueMenu"; trigger: queueActions
                                 WorkMenuItem { objectName: "prepareSelected"; text: "Prepare selected"; enabled: hasSelection&&!backend.busy; onTriggered: backend.batch("",false) }
                                 WorkMenuItem { objectName: "removeSelected"; text: "Remove selected"; enabled: hasSelection&&!backend.busy; onTriggered: backend.removeSelected() }
                             }
@@ -466,11 +509,12 @@ ApplicationWindow {
                         hint: text + " (" + nextReviewPhotoShortcut.nativeText + ")"
                         onClicked: backend.current = nextReviewPhotoRow
                     }
+                        id: photoActions
                     Command {
                         objectName: "photoActions"; text: "Photo actions"; symbol: "more"; iconOnly: true; quiet: true
-                        onClicked: photoMenu.popup(0, height)
-                        Menu {
-                            id: photoMenu; objectName: "photoMenu"
+                        onClicked: photoMenu.open()
+                        WorkMenu {
+                            id: photoMenu; objectName: "photoMenu"; trigger: photoActions
                             WorkMenuItem { objectName: "applyAll"; text: "Apply to all…"; enabled: hasPhoto&&!backend.busy; onTriggered: applyAllDialog.open() }
                             WorkMenuItem { text: "Fully automatic batch"; checkable: true; checked: backend.settings.automatic; enabled: hasPhoto&&!backend.busy; onTriggered: backend.set("automatic",checked) }
                             MenuSeparator {}
