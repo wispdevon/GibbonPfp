@@ -696,6 +696,12 @@ class ControllerTests : public QObject {
         const auto controlFont = scaleChoice->property("font").value<QFont>();
         QCOMPARE(controlFont.family(), "Inter");
         QVERIFY(controlFont.weight() >= QFont::Medium);
+        const auto *choiceLabel = scaleChoice->property("contentItem").value<QQuickItem *>();
+        const auto *indicator = scaleChoice->property("indicator").value<QQuickItem *>();
+        QVERIFY(choiceLabel && indicator);
+        QCOMPARE(choiceLabel->x(), 12.);
+        QVERIFY(choiceLabel->x() + choiceLabel->width() + 4 <= indicator->x());
+        QCOMPARE(scaleChoice->width() - indicator->x() - indicator->width(), 12.);
         auto *popup = scaleChoice->property("popup").value<QObject *>();
         QVERIFY(popup);
         QVERIFY(QMetaObject::invokeMethod(popup, "open"));
@@ -703,17 +709,23 @@ class ControllerTests : public QObject {
         auto *popupItem = popup->property("contentItem").value<QQuickItem *>();
         QVERIFY(popupItem);
         int checked = 0;
-        std::function<void(QQuickItem *)> checkFonts = [&](QQuickItem *item) {
+        std::function<void(QQuickItem *)> checkRows = [&](QQuickItem *item) {
             if (item->objectName() == "choiceDelegate") {
                 auto font = item->property("font").value<QFont>();
                 QCOMPARE(font.family(), "Inter");
                 QVERIFY(font.weight() >= QFont::Medium);
+                const auto *label = item->property("contentItem").value<QQuickItem *>();
+                QVERIFY(label);
+                QCOMPARE(item->width(), popupItem->width());
+                QCOMPARE(label->x(), 12.);
+                QCOMPARE(item->width() - label->x() - label->width(), 12.);
+                QVERIFY(item->height() >= 32.);
                 ++checked;
             }
             for (auto *child : item->childItems())
-                checkFonts(child);
+                checkRows(child);
         };
-        checkFonts(popupItem);
+        checkRows(popupItem);
         QVERIFY(checked > 0);
         if (!captures.isEmpty())
             QVERIFY(window->grabWindow().save(captures + "/150-dropdown-fonts-1024.png"));

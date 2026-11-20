@@ -75,16 +75,55 @@ ApplicationWindow {
     component Entry: TextField { font.family: "Inter"; font.weight: Font.Medium; implicitHeight: 38; color: ink; placeholderTextColor: muted; selectByMouse: true; font.pixelSize: 12; background: Rectangle { color: panel; radius: 8; border.color: parent.activeFocus ? accent : line } }
     component Choice: ComboBox {
         id: choice
-        font.family: "Inter"; font.weight: Font.Medium
+        implicitHeight: 38
+        padding: 12
+        topPadding: 0
+        bottomPadding: 0
+        spacing: 4
+        font.family: "Inter"
+        font.weight: Font.Medium
+        font.pixelSize: 12
+        palette.button: panel
+        palette.text: ink
+        palette.buttonText: ink
+
+        contentItem: Text {
+            text: choice.displayText
+            font: choice.font
+            color: ink
+            opacity: choice.enabled ? 1 : 0.45
+            elide: Text.ElideRight
+            horizontalAlignment: choice.mirrored ? Text.AlignRight : Text.AlignLeft
+            verticalAlignment: Text.AlignVCenter
+        }
         delegate: ItemDelegate {
+            id: option
             objectName: "choiceDelegate"
             required property int index
             required property var modelData
-            width: choice.width; text: modelData; font: choice.font
+            width: ListView.view.width
+            implicitHeight: 32
+            leftPadding: choice.padding
+            rightPadding: choice.padding
+            text: modelData
+            font: choice.font
             highlighted: choice.highlightedIndex === index
-            contentItem: Text { text: parent.text; font: choice.font; color: parent.highlighted ? win.palette.highlightedText : ink; elide: Text.ElideRight; verticalAlignment: Text.AlignVCenter }
+            contentItem: Text {
+                text: option.text
+                font: option.font
+                color: option.highlighted ? win.palette.highlightedText : ink
+                elide: Text.ElideRight
+                horizontalAlignment: choice.mirrored ? Text.AlignRight : Text.AlignLeft
+                verticalAlignment: Text.AlignVCenter
+            }
         }
-        implicitHeight: 38; font.pixelSize: 12; palette.button: panel; palette.text: ink; palette.buttonText: ink; background: Rectangle { color: panel; radius: 8; border.color: parent.activeFocus ? accent : line } }
+        background: Rectangle {
+            radius: 8
+            color: panel
+            border.color: choice.activeFocus ? accent : line
+            border.width: choice.activeFocus ? 2 : 1
+        }
+    }
 
     Item {
         id: workspace
