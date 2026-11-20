@@ -951,6 +951,150 @@ class ControllerTests : public QObject {
         }
     }
 
+    void panelDividersHaveBoundedWidths() {
+        QQmlApplicationEngine qml;
+        auto *images = new ImageStore;
+        qml.addImageProvider("photos", images);
+        Controller c(images, nullptr, {}, false);
+        c.setUiScale(100);
+        c.setDark(false);
+        qml.rootContext()->setContextProperty("backend", &c);
+        qml.load(QUrl::fromLocalFile(GIBBON_SOURCE_DIR "/qml/Main.qml"));
+        QVERIFY(!qml.rootObjects().isEmpty());
+        auto *window = qobject_cast<QQuickWindow *>(qml.rootObjects().front());
+        QVERIFY(window);
+        QScopeGuard deleteWindow([&] { qDeleteAll(qml.rootObjects()); });
+        window->resize(1440, 900);
+        window->requestActivate();
+        QTRY_VERIFY(window->isActive());
+        c.loadSample();
+        QTRY_VERIFY_WITH_TIMEOUT(!c.busy(), 15000);
+        window->setProperty("queueOpen", true);
+        window->setProperty("adjustmentsOpen", true);
+        auto *queue = window->findChild<QQuickItem *>("queuePane");
+        auto *inspector = window->findChild<QQuickItem *>("inspectorPane");
+        auto *crop = window->findChild<QQuickItem *>("leftPane");
+        auto *result = window->findChild<QQuickItem *>("rightPane");
+        const auto *panes = window->findChild<QQuickItem *>("panes");
+        QVERIFY(queue && inspector && crop && result && panes);
+
+        auto divider = [window](const QString &name) -> QQuickItem * {
+            for (auto *item : window->findChildren<QQuickItem *>(name))
+                if (item->isVisible())
+                    return item;
+            return nullptr;
+        };
+        auto dragTo = [&](const QString &name, int x) {
+            QTest::qWait(80);
+            const auto *handle = divider(name);
+            QVERIFY2(handle, qPrintable(name));
+            const auto start = handle->mapToScene(QPointF(handle->width()/2, handle->height()/2)).toPoint();
+            const QPoint finish(x, start.y());
+            QTest::mousePress(window, Qt::LeftButton, Qt::NoModifier, start);
+            QTest::mouseMove(window, finish);
+            QTest::mouseRelease(window, Qt::LeftButton, Qt::NoModifier, finish);
+        };
+        auto click = [window](const QQuickItem *item) {
+            QTest::qWait(100);
+            const auto point = item->mapToScene(QPointF(item->width()/2, item->height()/2)).toPoint();
+            QVERIFY(QRect(QPoint{}, window->size()).contains(point));
+            QTest::mouseClick(window, Qt::LeftButton, Qt::NoModifier, point);
+        };
+        const auto captures = qEnvironmentVariable("GIBBON_TEST_SCREENSHOTS");
+        auto capture = [&](const QString &name) {
+            if (!captures.isEmpty()) {
+                QVERIFY(QDir().mkpath(captures));
+                QTest::qWait(100);
+                QVERIFY(window->grabWindow().save(captures + "/" + name + ".png"));
+            }
+        };
+        QTRY_VERIFY(qAbs(queue->width() - 224) < 1.);
+        QTRY_VERIFY(qAbs(inspector->width() - 270) < 1.);
+        QTRY_VERIFY(qAbs(crop->width() - result->width()) < 1.);
+        dragTo("queueDivider", window->width()-2);
+        QTRY_VERIFY(qAbs(queue->width() - 380) < 1.);
+        dragTo("queueDivider", 2);
+        QTRY_VERIFY(qAbs(queue->width() - 170) < 1.);
+        dragTo("inspectorDivider", 2);
+        QTRY_VERIFY(qAbs(inspector->width() - 420) < 1.);
+        dragTo("inspectorDivider", window->width()-2);
+        QTRY_VERIFY(qAbs(inspector->width() - 240) < 1.);
+        const auto *queueCaption = window->findChild<QQuickItem *>("queueCaption");
+        const auto *checkedCount = window->findChild<QQuickItem *>("queueSelectionCount");
+        QVERIFY(queueCaption && checkedCount);
+        QVERIFY(queueCaption->mapRectToScene(queueCaption->boundingRect()).right() <=
+                checkedCount->mapRectToScene(checkedCount->boundingRect()).left());
+        const auto *refine = window->findChild<QQuickItem *>("refineTab");
+        QVERIFY(refine);
+        click(refine);
+        c.setReference(QUrl::fromLocalFile(c.items().front().toMap()["path"].toString()));
+        QTRY_VERIFY_WITH_TIMEOUT(!c.busy(), 15000);
+        c.stroke({QVariantList{.2, .3}}, true, .025);
+        QTRY_VERIFY_WITH_TIMEOUT(!c.busy(), 15000);
+        const auto inspectorBounds = inspector->mapRectToScene(inspector->boundingRect());
+        for (const auto *name : {"referenceCommand", "removeReference", "brushChoice", "clearStrokes"}) {
+            const auto *control = window->findChild<QQuickItem *>(name);
+            QVERIFY(control && control->isVisible());
+            const auto bounds = control->mapRectToScene(control->boundingRect());
+            QVERIFY2(bounds.left() >= inspectorBounds.left() && bounds.right() <= inspectorBounds.right(), name);
+        }
+        capture("panel-divider-sidebar-minima-100");
+        dragTo("photoDivider", 2);
+        QTRY_VERIFY(qAbs(crop->width() - 120) < 1.);
+        dragTo("photoDivider", window->width()-2);
+        QTRY_VERIFY(qAbs(result->width() - 120) < 1.);
+        auto *photoDivider = divider("photoDivider");
+        QVERIFY(photoDivider);
+        photoDivider->forceActiveFocus(Qt::TabFocusReason);
+        QTest::keyClick(window, Qt::Key_Left);
+        QTRY_VERIFY(result->width() > 125.);
+        capture("panel-divider-wide-100");
+
+        const auto *queueToggle = window->findChild<QQuickItem *>("toggleQueue");
+        const auto *inspectorToggle = window->findChild<QQuickItem *>("toggleInspector");
+        QVERIFY(queueToggle && inspectorToggle);
+        const auto chosenCropWidth = crop->width();
+        click(queueToggle);
+        QTRY_VERIFY(!queue->isVisible());
+        QTRY_VERIFY(qAbs(crop->width() - chosenCropWidth) < 1.);
+        click(queueToggle);
+        QTRY_VERIFY(queue->isVisible());
+        QTRY_VERIFY(qAbs(crop->width() - chosenCropWidth) < 1.);
+
+        c.setDark(true);
+        c.setUiScale(150);
+        window->resize(1024, 720);
+        QTest::qWait(100);
+        if (!inspector->isVisible())
+            click(inspectorToggle);
+        QTRY_VERIFY(!queue->isVisible() && inspector->isVisible());
+        dragTo("inspectorDivider", 2);
+        QTRY_VERIFY(inspector->width() > 350. && inspector->width() < 420.);
+        QTRY_VERIFY(crop->width() >= 119. && result->width() >= 119.);
+        QVERIFY(inspector->mapRectToScene(inspector->boundingRect()).right() <= window->width());
+        const auto compactInspectorWidth = inspector->width();
+        click(queueToggle);
+        QTRY_VERIFY(queue->isVisible() && !inspector->isVisible());
+        QTRY_VERIFY(qAbs(queue->width() - 170) < 1.);
+        dragTo("queueDivider", window->width()-2);
+        QTRY_VERIFY(qAbs(queue->width() - 380) < 1.);
+        auto *queueDivider = divider("queueDivider");
+        QVERIFY(queueDivider);
+        queueDivider->forceActiveFocus(Qt::TabFocusReason);
+        QTest::keyClick(window, Qt::Key_Left);
+        QTRY_VERIFY(queue->width() < 375.);
+        capture("panel-divider-queue-150");
+        click(inspectorToggle);
+        QTRY_VERIFY(!queue->isVisible() && inspector->isVisible());
+        QTRY_VERIFY(qAbs(inspector->width() - compactInspectorWidth) < 1.);
+        auto *inspectorDivider = divider("inspectorDivider");
+        QVERIFY(inspectorDivider);
+        inspectorDivider->forceActiveFocus(Qt::TabFocusReason);
+        QTest::keyClick(window, Qt::Key_Right);
+        QTRY_VERIFY(inspector->width() < compactInspectorWidth - 5.);
+        capture("panel-divider-inspector-150");
+    }
+
     void queueControlsAndApplyConfirmation() {
         QQmlApplicationEngine qml;
         auto *images = new ImageStore;

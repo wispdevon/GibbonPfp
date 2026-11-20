@@ -31,12 +31,15 @@ Keep import, editing, and delivery in stable locations. Place **Add photos…**,
 empty or populated queue. The empty canvas accepts drops. Keep occasional
 workspace commands in a menu and reserve the bottom bar for status and export.
 
-Queue → Preview / Crop → Result → adjustments follows the work sequence.
-The two image panes start at equal widths, with a draggable divider. Queue and
-adjustments collapse independently and initially hide when logical space is limited.
-Narrow workspaces show at most one sidebar. Give **Frame** and **Refine**
-separate tabs in the inspector. Open Frame initially and keep the chosen tab
-when moving between photos. Place encoding and sizing in **Export as…**.
+Queue → Preview / Crop → Result → inspector follows the work sequence.
+The image panes start at equal widths and keep at least 120 logical pixels each.
+The queue starts at 224 pixels and adjusts between 170 and 380. The inspector
+starts at 270 pixels and adjusts between 240 and 420. Sidebars reserve room for
+both image panes, so available space can lower their maximum. Drag a divider
+or focus it with Tab and use Left or Right Arrow. Retain sidebar widths when
+users hide and reopen them. Narrow workspaces show at most one sidebar.
+Give **Frame** and **Refine** separate tabs in the inspector. Open Frame initially
+and keep the chosen tab when moving between photos. Place encoding and sizing in **Export as…**.
 Dense regions scroll independently. Minimum window size is 1024 × 720.
 
 The left pane shows the full oriented source with a single editable crop outline.

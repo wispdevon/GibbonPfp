@@ -23,6 +23,8 @@ ApplicationWindow {
     property bool adjustmentsOpen: workspace.width >= 900
     readonly property bool compactHeader: workspace.width < 670
     readonly property bool compact: workspace.height < 650
+    readonly property int dividerWidth: 10
+    readonly property int minimumPhotoWidth: 120
     readonly property string outputUrl: hasPhoto && backend.result.width !== undefined ? "image://photos/output?" + backend.revision : ""
     property int brushMode: 0
     property string fileAction: ""
@@ -55,6 +57,10 @@ ApplicationWindow {
                 return row
         }
         return -1
+    }
+    function nudgePanelWidth(item: Item, delta: real) {
+        item.SplitView.preferredWidth = Math.max(item.SplitView.minimumWidth,
+                                                Math.min(item.SplitView.maximumWidth, item.width + delta))
     }
     palette.window: panel
     palette.windowText: ink
@@ -118,6 +124,26 @@ ApplicationWindow {
         id: workDialog
         font.family: "Inter"; font.weight: Font.Medium
         header: WorkLabel { text: workDialog.title; padding: 12; font.family: "Space Grotesk"; font.pixelSize: 16; font.weight: Font.Bold; color: ink }
+    }
+    component PanelDivider: Rectangle {
+        id: divider
+        required property string label
+        signal nudge(int delta)
+        implicitWidth: win.dividerWidth
+        activeFocusOnTab: true
+        Accessible.role: Accessible.Splitter
+        Accessible.name: label
+        Accessible.description: "Press Left or Right Arrow to resize"
+        Accessible.focusable: true
+        Keys.onLeftPressed: nudge(-12)
+        Keys.onRightPressed: nudge(12)
+        HoverHandler { cursorShape: Qt.SplitHCursor }
+        color: SplitHandle.pressed || activeFocus ? strong : "transparent"
+        Rectangle {
+            anchors.centerIn: parent
+            width: divider.activeFocus ? 3 : 2; height: 40; radius: 1
+            color: divider.activeFocus || divider.SplitHandle.hovered || divider.SplitHandle.pressed ? accent : muted
+        }
     }
     component Action: Button {
         id: action
@@ -299,16 +325,39 @@ ApplicationWindow {
             }
             Rectangle { anchors.bottom: parent.bottom; width: parent.width; height: 1; color: line }
         }
-        RowLayout {
-            Layout.fillWidth: true; Layout.fillHeight: true; Layout.margins: 12; spacing: 12
+        SplitView {
+            id: workPanels
+            Layout.fillWidth: true; Layout.fillHeight: true; Layout.margins: 12
+            orientation: Qt.Horizontal
+            readonly property real sidebarSpace: width - editorPane.SplitView.minimumWidth
+                - (queuePane.visible ? win.dividerWidth : 0) - (inspectorPane.visible ? win.dividerWidth : 0)
+            handle: PanelDivider {
+                readonly property bool bordersQueue: queuePane.visible && x < editorPane.x
+                objectName: bordersQueue ? "queueDivider" : "inspectorDivider"
+                label: bordersQueue ? "Resize photo queue" : "Resize inspector"
+                onNudge: delta => {
+                    if (bordersQueue)
+                        win.nudgePanelWidth(queuePane, delta)
+                    else
+                        win.nudgePanelWidth(inspectorPane, -delta)
+                }
+            }
             Rectangle {
-                visible: queueOpen; Layout.preferredWidth: 224; Layout.fillHeight: true; radius: 12; color: panel; border.color: line
+                id: queuePane; objectName: "queuePane"
+                visible: queueOpen; radius: 12; color: panel; border.color: line
+                SplitView.minimumWidth: 170
+                SplitView.preferredWidth: 224
+                SplitView.maximumWidth: Math.max(170, Math.min(380, workPanels.sidebarSpace
+                    - (inspectorPane.visible ? inspectorPane.SplitView.minimumWidth : 0)))
                 ColumnLayout {
                     anchors.fill: parent; anchors.margins: 10; spacing: 6
                     RowLayout {
                         Layout.fillWidth: true
-                        Caption { text: "Photo queue" }
-                        Item { Layout.fillWidth: true }
+                        Caption {
+                            objectName: "queueCaption"
+                            text: queuePane.width < 190 ? "Queue" : "Photo queue"
+                            Layout.fillWidth: true; elide: Text.ElideRight
+                        }
                         WorkLabel {
                             objectName: "queueSelectionCount"
                             text: backend.selectedCount + " of " + queuePhotos.length + " selected"
@@ -364,7 +413,10 @@ ApplicationWindow {
                 }
             }
             ColumnLayout {
-                Layout.fillWidth: true; Layout.fillHeight: true; spacing: 10
+                id: editorPane
+                SplitView.fillWidth: true
+                SplitView.minimumWidth: 2 * win.minimumPhotoWidth + win.dividerWidth
+                spacing: 10
                 Rectangle {
                     id: emptyCanvas
                     visible: !hasPhoto; Layout.fillWidth: true; Layout.fillHeight: true
@@ -381,12 +433,18 @@ ApplicationWindow {
                     visible: hasPhoto
                     Layout.fillWidth: true; Layout.fillHeight: true
                     orientation: Qt.Horizontal
-                    handle: Rectangle { implicitWidth: 10; color: SplitHandle.pressed ? accent : "transparent"
-                        Rectangle { anchors.centerIn: parent; width: 2; height: 40; radius: 1; color: SplitHandle.hovered ? accent : muted }
+                    readonly property real photoWidthLimit: Math.max(win.minimumPhotoWidth,
+                                                                      width - win.dividerWidth - win.minimumPhotoWidth)
+                    handle: PanelDivider {
+                        objectName: "photoDivider"
+                        label: "Resize preview and result"
+                        onNudge: delta => win.nudgePanelWidth(leftPane, delta)
                     }
                     ColumnLayout {
-                        objectName: "leftPane"
-                        SplitView.preferredWidth: (panes.width-10) / 2; SplitView.minimumWidth: 90
+                        id: leftPane; objectName: "leftPane"
+                        SplitView.preferredWidth: (panes.width - win.dividerWidth) / 2
+                        SplitView.minimumWidth: win.minimumPhotoWidth
+                        SplitView.maximumWidth: panes.photoWidthLimit
                         spacing: 8
                         Caption { text: "Preview / Crop"; Layout.preferredHeight: 38; verticalAlignment: Text.AlignVCenter; Layout.fillWidth: true; elide: Text.ElideRight }
                         Rectangle {
@@ -449,7 +507,11 @@ ApplicationWindow {
                         }
                     }
                     ColumnLayout {
-                        SplitView.fillWidth: true; SplitView.minimumWidth: 90; spacing: 8
+                        objectName: "rightPane"
+                        SplitView.fillWidth: true
+                        SplitView.minimumWidth: win.minimumPhotoWidth
+                        SplitView.maximumWidth: panes.photoWidthLimit
+                        spacing: 8
                         RowLayout {
                             id: resultHeader
                             Layout.fillWidth: true; Layout.preferredHeight: 38
@@ -523,8 +585,8 @@ ApplicationWindow {
                         hint: text + " (" + nextReviewPhotoShortcut.nativeText + ")"
                         onClicked: backend.current = nextReviewPhotoRow
                     }
-                        id: photoActions
                     Command {
+                        id: photoActions
                         objectName: "photoActions"; text: "Photo actions"; symbol: "more"; iconOnly: true; quiet: true
                         onClicked: photoMenu.open()
                         WorkMenu {
@@ -561,7 +623,12 @@ ApplicationWindow {
                 }
             }
             Rectangle {
-                visible: hasPhoto && adjustmentsOpen; Layout.preferredWidth: 270; Layout.fillHeight: true; radius: 12; color: panel; border.color: line
+                id: inspectorPane; objectName: "inspectorPane"
+                visible: hasPhoto && adjustmentsOpen; radius: 12; color: panel; border.color: line
+                SplitView.minimumWidth: 240
+                SplitView.preferredWidth: 270
+                SplitView.maximumWidth: Math.max(240, Math.min(420, workPanels.sidebarSpace
+                    - (queuePane.visible ? queuePane.SplitView.minimumWidth : 0)))
                 ColumnLayout {
                     anchors.fill: parent; anchors.margins: 12; spacing: 8
                     TabBar {
@@ -609,10 +676,12 @@ ApplicationWindow {
                                 RowLayout {
                                     Layout.fillWidth: true
                                     Command {
+                                        objectName: "referenceCommand"
                                         text: backend.settings.reference ? "Change reference" : "Match reference…"
                                         symbol: "photo"; Layout.fillWidth: true; onClicked: referencePhoto.open()
                                     }
                                     Command {
+                                        objectName: "removeReference"
                                         text: "Remove reference"; symbol: "clear"; quiet: true; iconOnly: true
                                         visible: !!backend.settings.reference
                                         onClicked: {backend.set("reference","");backend.preview()}
@@ -623,6 +692,7 @@ ApplicationWindow {
                                 RowLayout {
                                     visible: backend.settings.background !== "off"; Layout.fillWidth: true
                                     Choice {
+                                        objectName: "brushChoice"
                                         Layout.fillWidth: true
                                         model: ["Brush off", "Keep brush", "Remove brush"]
                                         currentIndex: brushMode; onActivated: brushMode = currentIndex
