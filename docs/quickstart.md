@@ -28,10 +28,10 @@ or follow the [build instructions](BUILDING.md). The desktop launcher is named
    to **Checked photos (3)** with **Use each photo’s output settings** enabled. The
    first click on **Quick Export** also opens **Export as…** when there is no
    remembered successful destination. Click **Choose folder…**, select the
-   destination, and confirm. In Linux’s native folder picker, finish with **Open**.
-   Entering a path may navigate into that directory first, so select the intended
-   folder and confirm it with **Open**. The output folder includes a JSON report.
-   The default output is up to 360 × 480, portrait JPEG. When you choose a shared style, **Export as…**
+   destination, and confirm. In Linux’s native folder picker, a typed path may
+   navigate into that directory, so select the intended folder and click **Open**.
+   The output folder includes a JSON report. The default is a JPEG capped at
+   360 × 480 pixels. When you choose a shared style, **Export as…**
    also lets you choose another size, PNG, filename prefix, JPEG quality and
    backdrop, and screen sharpening.
 

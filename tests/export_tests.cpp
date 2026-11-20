@@ -125,6 +125,8 @@ class ExportTests : public QObject {
         QVERIFY(c.quickExport());
         QTRY_VERIFY_WITH_TIMEOUT(!c.busy(), 15000);
         QCOMPARE(QImageReader(dir.filePath("out/repeat-first-pfp-1.jpg")).size(), QSize(180, 240));
+        QVERIFY2(c.message().contains(QDir::toNativeSeparators(out.toLocalFile())),
+                 qPrintable(c.message()));
         ImageStore secondStore;
         Controller resumed(&secondStore, nullptr, {}, false);
         addPhoto(resumed, dir.filePath("second.png"));

@@ -780,6 +780,9 @@ void Controller::processMany(QVector<int> rows, const QVariantMap &exportRequest
         endProgress();
         const auto result = w->result();
         status = result.message;
+        if (!exportRequest.isEmpty() && exportRequest.value("scope").toString() != "zip")
+            status += " · " + QDir::toNativeSeparators(
+                                 exportRequest.value("destination").toString());
         if (result.exported && !exportRequest.isEmpty()) {
             exportHistory = exportRequest;
             QSettings().setValue("exportHistory", exportHistory);
