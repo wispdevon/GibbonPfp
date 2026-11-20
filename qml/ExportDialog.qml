@@ -192,12 +192,12 @@ Dialog {
             spacing: 12
             GridLayout {
                 Layout.fillWidth: true
-                columns: 2
+                columns: dialog.perPhoto ? 1 : 2
                 uniformCellWidths: true
                 columnSpacing: 18
                 rowSpacing: 8
                 FieldLabel { text: "Photos" }
-                FieldLabel { text: "Output size" }
+                FieldLabel { visible: !dialog.perPhoto; text: "Output size" }
 
                 WorkspaceChoice {
                     Layout.fillWidth: true
@@ -218,61 +218,64 @@ Dialog {
                     objectName: "exportSize"
                     Layout.preferredWidth: 1
                     Accessible.name: "Output size"
-                    enabled: !dialog.perPhoto
+                    visible: !dialog.perPhoto
                     model: ["Up to 360 × 480", "Source crop size", "Up to 720 × 960",
                             "Up to 1080 × 1440", "Custom limit"]
                     currentIndex: dialog.sizeMode
                     onActivated: dialog.changeSize(currentIndex)
                 }
+            }
+            FieldLabel {
+                visible: dialog.scope === "checked" &&
+                         (dialog.controller.selectedCount === 0 || dialog.hiddenCheckedCount > 0)
+                text: dialog.controller.selectedCount === 0 ? "Check photos in the queue to use this scope."
+                    : dialog.hiddenCheckedCount + " checked photos are hidden by the queue filter."
+                color: dialog.muted
+                font.pixelSize: 12
+            }
+            Tick {
+                objectName: "exportPerPhoto"
+                visible: dialog.scope !== "current"
+                text: "Use each photo’s output settings"
+                checked: dialog.mixed
+                onClicked: dialog.mixed = checked
+            }
+            RowLayout {
+                visible: !dialog.perPhoto && dialog.sizeMode === 4
+                Layout.fillWidth: true
+                FieldLabel { Layout.fillWidth: false; text: "Maximum width" }
+                Field {
+                    objectName: "exportWidth"
+                    Layout.preferredWidth: 100
+                    Accessible.name: "Maximum width in pixels"
+                    inputMethodHints: Qt.ImhDigitsOnly
+                    validator: IntValidator { bottom: 0; top: 60000 }
+                    text: dialog.style.width > 0 ? String(dialog.style.width) : ""
+                    onTextEdited: {
+                        const width = Number(text)
+                        dialog.edit({ capped: false, width: width,
+                                      height: width > 0 ? Math.round(width / 3 * 4) : 1 })
+                    }
+                }
                 FieldLabel {
-                    visible: dialog.scope === "checked"
-                    Layout.columnSpan: 2
-                    text: dialog.controller.selectedCount === 0 ? "Check photos in the queue to use this scope."
-                          : dialog.hiddenCheckedCount > 0
-                            ? dialog.hiddenCheckedCount + " checked photos are hidden by the queue filter."
-                            : "Includes checked photos hidden by the queue filter."
-                    color: dialog.muted
-                    font.pixelSize: 12
+                    text: "× " + (dialog.style.height ?? 0) + " px"
+                    font.family: "Geist Mono"
+                    Accessible.name: "Calculated height in pixels"
                 }
-                Tick {
-                    objectName: "exportPerPhoto"
-                    visible: dialog.scope !== "current"
-                    Layout.columnSpan: 2
-                    text: "Use each photo’s output settings"
-                    checked: dialog.mixed
-                    onClicked: dialog.mixed = checked
-                }
-                RowLayout {
-                    visible: !dialog.perPhoto && dialog.sizeMode === 4
-                    Layout.fillWidth: true
-                    Layout.columnSpan: 2
-                    FieldLabel { Layout.fillWidth: false; text: "Maximum width" }
-                    Field {
-                        objectName: "exportWidth"
-                        Layout.preferredWidth: 100
-                        Accessible.name: "Maximum width in pixels"
-                        inputMethodHints: Qt.ImhDigitsOnly
-                        validator: IntValidator { bottom: 0; top: 60000 }
-                        text: dialog.style.width > 0 ? String(dialog.style.width) : ""
-                        onTextEdited: {
-                            const width = Number(text)
-                            dialog.edit({ capped: false, width: width,
-                                          height: width > 0 ? Math.round(width / 3 * 4) : 1 })
-                        }
-                    }
-                    FieldLabel {
-                        text: "× " + (dialog.style.height ?? 0) + " px"
-                        font.family: "Geist Mono"
-                        Accessible.name: "Calculated height in pixels"
-                    }
-                }
+            }
+            GridLayout {
+                visible: !dialog.perPhoto
+                Layout.fillWidth: true
+                columns: 2
+                uniformCellWidths: true
+                columnSpacing: 18
+                rowSpacing: 8
                 FieldLabel { text: "Format" }
                 FieldLabel { text: "Filename prefix" }
                 WorkspaceChoice {
                     Layout.fillWidth: true
                     objectName: "exportFormat"
                     Accessible.name: "File format"
-                    enabled: !dialog.perPhoto
                     model: ["JPEG · solid backdrop", "PNG · supports transparency"]
                     currentIndex: dialog.jpeg ? 0 : 1
                     onActivated: dialog.edit({ format: currentIndex === 0 ? "jpeg" : "png" })
@@ -280,16 +283,15 @@ Dialog {
                 Field {
                     objectName: "exportPrefix"
                     Accessible.name: "Filename prefix"
-                    enabled: !dialog.perPhoto
                     placeholderText: "Optional"
                     text: dialog.style.prefix ?? ""
                     onTextEdited: dialog.edit({ prefix: text })
                 }
-                FieldLabel { visible: dialog.jpeg && !dialog.perPhoto; text: "JPEG quality · " + dialog.style.quality }
-                FieldLabel { visible: dialog.jpeg && !dialog.perPhoto; text: "JPEG backdrop" }
+                FieldLabel { visible: dialog.jpeg; text: "JPEG quality · " + dialog.style.quality }
+                FieldLabel { visible: dialog.jpeg; text: "JPEG backdrop" }
                 Slider {
                     objectName: "exportQuality"
-                    visible: dialog.jpeg && !dialog.perPhoto
+                    visible: dialog.jpeg
                     Layout.fillWidth: true
                     Accessible.name: "JPEG quality"
                     from: 1
@@ -300,7 +302,7 @@ Dialog {
                 }
                 Command {
                     objectName: "exportBackdrop"
-                    visible: dialog.jpeg && !dialog.perPhoto
+                    visible: dialog.jpeg
                     Layout.fillWidth: true
                     text: dialog.style.backgroundColor ?? "#ffffff"
                     Accessible.name: "JPEG backdrop color"
@@ -312,7 +314,6 @@ Dialog {
                 Tick {
                     objectName: "exportSharpen"
                     text: "Sharpen for screen"
-                    enabled: !dialog.perPhoto
                     checked: dialog.style.sharpenScreen ?? false
                     onClicked: dialog.edit({ sharpenScreen: checked })
                 }
@@ -320,7 +321,7 @@ Dialog {
                     Layout.fillWidth: true
                     objectName: "exportSharpening"
                     Accessible.name: "Screen sharpening level"
-                    enabled: !dialog.perPhoto && !!dialog.style.sharpenScreen
+                    enabled: !!dialog.style.sharpenScreen
                     model: ["Low", "Standard", "High"]
                     currentIndex: ["low", "standard", "high"].indexOf(dialog.style.sharpening)
                     onActivated: dialog.edit({ sharpening: ["low", "standard", "high"][currentIndex] })
@@ -347,16 +348,17 @@ Dialog {
         Command {
             objectName: "saveExportPreset"
             Layout.leftMargin: 18
-            Layout.topMargin: 10
-            Layout.bottomMargin: 16
             text: "Save preset…"
-            enabled: !dialog.perPhoto && !dialog.validation
+            visible: !dialog.perPhoto
+            enabled: !dialog.validation
             onClicked: presetPicker.open()
         }
         Item { Layout.fillWidth: true }
         Command { objectName: "cancelExport"; text: "Cancel"; onClicked: dialog.reject() }
         Command {
             objectName: "chooseExportDestination"
+            Layout.topMargin: 10
+            Layout.bottomMargin: 16
             Layout.rightMargin: 18
             text: dialog.zip ? "Save ZIP…" : "Choose folder…"
             primary: true

@@ -345,6 +345,31 @@ class ExportTests : public QObject {
         QTRY_VERIFY(!modal->property("visible").toBool());
         QCOMPARE(c.settings(), original);
         QVERIFY(!QSettings().contains("exportHistory"));
+
+        addPhoto(c, dir.filePath("another.png"));
+        c.setDark(false);
+        QVERIFY(QMetaObject::invokeMethod(quick, "clicked"));
+        QTRY_VERIFY(modal->property("visible").toBool());
+        QCOMPARE(modal->property("scope").toString(), "checked");
+        QVERIFY(modal->property("perPhoto").toBool());
+        for (const auto name : {"exportSize", "exportFormat", "exportPrefix", "exportSharpen",
+                                "saveExportPreset"}) {
+            auto *control = modal->findChild<QObject *>(name);
+            QVERIFY(control);
+            QVERIFY(!control->property("visible").toBool());
+        }
+        if (!capture.isEmpty()) {
+            QTest::qWait(100);
+            QVERIFY(window->grabWindow().save(capture + "/150-export-as-checked.png"));
+        }
+        auto *perPhoto = modal->findChild<QObject *>("exportPerPhoto");
+        QVERIFY(perPhoto);
+        QVERIFY(perPhoto->setProperty("checked", false));
+        QVERIFY(QMetaObject::invokeMethod(perPhoto, "clicked"));
+        QVERIFY(!modal->property("perPhoto").toBool());
+        QVERIFY(modal->findChild<QObject *>("exportFormat")->property("visible").toBool());
+        QVERIFY(QMetaObject::invokeMethod(cancel, "clicked"));
+        QVERIFY(!QSettings().contains("exportHistory"));
     }
 };
 
