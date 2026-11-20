@@ -23,27 +23,34 @@ are at least 32 pixels high. Elide long labels within the available width.
 
 ## Work surface
 
+Keep import, editing, and delivery in stable locations. Place **Add photos…**,
+**Add folder…**, and **Load sample** together in the top bar, available with an
+empty or populated queue. The empty canvas accepts drops. Keep occasional
+workspace commands in a menu and reserve the bottom bar for status and export.
+
 Queue → Preview / Crop → Result → adjustments follows the work sequence.
 The two image panes start at equal widths, with a draggable divider. Queue and
 adjustments collapse independently and initially hide when logical space is limited.
-Narrow workspaces show at most one sidebar. Adjustment sections are Frame, Refine,
-Export. Dense regions scroll independently. Minimum window size is 1024 × 720. Avoid nested cards,
-decorative heroes, pills for ordinary commands, and distracting idle animation.
-Place **Open photos…**, **Add folder…**, and **Load sample** in the empty crop canvas.
+Narrow workspaces show at most one sidebar. Give **01 Frame** and **02 Refine**
+separate tabs in the inspector. Open Frame initially and keep the chosen tab
+when moving between photos. Place encoding and sizing in **Export as…**.
+Dense regions scroll independently. Minimum window size is 1024 × 720.
 
 Output previews are decoded from the actual JPEG/PNG bytes. The left pane shows
 the finished export inside the editable crop, over a dimmed
-full source. The right pane offers hold-to-view mask inspection and crop-coordinate
-brushes. Both share one completed output revision; mark pending work as Updating.
+full source. The right pane shows the encoded result while the user applies
+Keep or Remove brush strokes in crop coordinates. Both panes share one completed
+preview revision. Mark pending work as Updating.
 Use a checkerboard behind transparent pixels. Keyboard navigation, tool labels,
 visible focus, and non-drag crop zoom controls remain available. Crop zoom is
 relative to each photo’s automatic frame, from 40–100%: 100% is the automatic
 crop, and lower percentages widen it. Preserve the requested headroom fraction
 while zooming where source space permits. Headroom changes recalculate automatic
 framing without resetting the selected zoom. Keep the percentage through dragging,
-undo, and sessions; report source-boundary limits. **Load sample** opens a bundled
-portrait of a fictional person. Run the same framing and removal pipeline used for
-imported portraits so the sample can demonstrate both tools.
+undo, and sessions. Report source-boundary limits. **Load sample** opens a batch
+of three bundled portraits of fictional people. Make each person recognizable
+in the queue. Repeated loads reuse existing entries and preserve their edits.
+Use the same framing and removal pipeline as for imported portraits.
 
 Background removal uses a frame ten zoom percentage points wider than the export
 (65% → 55%, including a removal-only 30% frame at the 40% slider minimum).
@@ -54,7 +61,7 @@ Both models use this margin; export geometry and brush coordinates stay unchange
 Edge feather uses a live Geist Mono numeric readout in output pixels, with 0.5 px
 steps from 0–10. Default to zero added blur; preserve explicit saved values.
 Feather the automatic mask before manual Keep/Remove strokes, which retain firm
-edges. Inspect masks without display smoothing or pre-enlargement.
+edges. Show the effect of brush edits against the chosen backdrop or transparency.
 Fast uses MODNet at 512 × 512 and reconstructs its prediction against a source crop bounded to
 1600 px on the long edge before export resizing. Use image-guided refinement,
 solid confidence endpoints, and replicated borders to avoid artificial edge haze.
@@ -112,7 +119,7 @@ stay in the queue and changed source fingerprints invalidate approval. Display
 a persistent autosave error when the lock cannot be acquired or a write fails.
 High Quality consent and processing caches never persist.
 
-## Queue application and ZIP export
+## Batch editing and delivery
 
 Factory settings use a 360 × 480 cap, 70% crop zoom, 8% headroom, Fast removal,
 white JPEG at quality 80, and Standard screen sharpening. Edits affect the open
@@ -123,10 +130,9 @@ open photo immediately and other photos when viewed or processed. Undo remains
 per photo.
 
 Opening a photo and checking it are independent. The queue filter controls
-visibility. The selected count and **Prepare selected**, **Remove selected**, and
-**Export selected** include checked photos hidden by the filter. Show the hidden
-count when a filter hides checked photos. Disable the commands when
-the checked set is empty. **Export current** uses the open photo.
+visibility. Preparing, removing, or exporting checked photos includes those
+hidden by the filter. Show the hidden count and disable checked-photo commands
+when the checked set is empty. Current-photo commands use the open photo.
 Keep the current position visible. Show its position in the full queue and in the
 active filter, or say **Outside filter**. **Previous** and **Next** move through
 visible queue entries without wrapping. **Next review** searches the whole queue
@@ -135,9 +141,14 @@ the filter.
 Folder exports write each successful photo as it completes and report holds or
 failures. Completed output stays on disk after cancellation.
 
-Hold to view mask works with pointer or keyboard Space, returning to the composite
-on release, focus loss, or photo change. Selecting brushes does not latch mask view.
-**Export queue to ZIP** lives in Export controls and uses the native save dialog.
-It includes all queue entries. Every photo must pass processing and review before
-the archive is atomically published. Cancellation and failures leave the existing
-destination intact. Include an export report.
+**Export as…** brings scope, output settings, and destination into one decision.
+Offer the current photo, checked photos, or the whole queue as a ZIP. Keep
+framing, brushes, and review policy specific to each photo. Cancel discards
+unfinished export choices.
+
+**Quick Export** uses the last successful export settings and destination. Use
+the current photo's profile settings for the first export or the output settings
+from an explicitly loaded preset. Show which photos the action will target.
+Open **Export as…** when a destination is needed. Preserve existing archives
+when repeating a ZIP export. Every queued photo must pass processing and review
+before publishing the complete ZIP with its export report.

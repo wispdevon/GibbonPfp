@@ -37,6 +37,10 @@ independent of the interface theme.
 - Let the content lead. Put frequent controls in a stable position and allow
   dense regions to scroll independently. Keep preview geometry stable while
   loading and place empty states or errors in the affected work region.
+- Group related commands in one toolbar and move occasional actions into a
+  named menu. Keep text beside icons for import and export. Familiar actions
+  such as previous and next can use icons alone with a tooltip, an accessible
+  name, and the same keyboard and pointer target as a labeled button.
 - Make focus visible, label controls, and offer keyboard alternatives to pointer
   and drag interactions. Restore focus when dialogs close. Allow text to wrap and
   preserve essential controls at smaller sizes and larger interface scales.
