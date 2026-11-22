@@ -17,6 +17,7 @@ export APPIMAGE_EXTRACT_AND_RUN=1
 export VERSION="$version"
 export OUTPUT="$PWD/dist/HeadshotFlow-$version-x86_64.AppImage"
 # linuxdeploy's bundled strip cannot read newer toolchains' RELR sections.
-NO_STRIP=1 dist/tools/linuxdeploy.AppImage --appdir "$stage_dir" --executable "$stage_dir/usr/bin/gibbonpfp" --desktop-file assets/gibbonpfp.desktop --icon-file assets/gibbonpfp.svg --output appimage
+NO_STRIP=1 dist/tools/linuxdeploy.AppImage --appdir "$stage_dir" --executable "$stage_dir/usr/bin/gibbonpfp" --custom-apprun scripts/apprun.sh --desktop-file assets/gibbonpfp.desktop --icon-file assets/gibbonpfp.svg --output appimage
 "$OUTPUT" --version
+GIBBON_DISABLE_SOURCE_MODELS=1 "$OUTPUT" models list >/dev/null
 QT_QPA_PLATFORM=offscreen QT_QUICK_BACKEND=software "$OUTPUT" --smoke-test
