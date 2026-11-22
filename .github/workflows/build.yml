@@ -140,10 +140,13 @@ jobs:
         run: |
           bash scripts/sign_macos.sh dist/portable/gibbonpfp.app
           python scripts/test_packaged.py dist/portable gibbonpfp.app/Contents/MacOS/gibbonpfp
-          hdiutil create -volname HeadshotFlow -srcfolder dist/portable -ov -format UDZO dist/HeadshotFlow-1.0.2-${{ matrix.name }}.dmg
+          version=$(sed -n 's/^CMAKE_PROJECT_VERSION:STATIC=//p' build-release/CMakeCache.txt)
+          : "${version:?Missing project version in CMake cache}"
+          dmg="dist/HeadshotFlow-$version-${{ matrix.name }}.dmg"
+          hdiutil create -volname HeadshotFlow -srcfolder dist/portable -ov -format UDZO "$dmg"
           if [[ -n "$APPLE_CERTIFICATE_BASE64" ]]; then
-            xcrun notarytool submit dist/HeadshotFlow-1.0.2-${{ matrix.name }}.dmg --apple-id "$APPLE_ID" --password "$APPLE_APP_PASSWORD" --team-id "$APPLE_TEAM_ID" --wait
-            xcrun stapler staple dist/HeadshotFlow-1.0.2-${{ matrix.name }}.dmg
+            xcrun notarytool submit "$dmg" --apple-id "$APPLE_ID" --password "$APPLE_APP_PASSWORD" --team-id "$APPLE_TEAM_ID" --wait
+            xcrun stapler staple "$dmg"
           fi
       - name: Linux AppImage
         if: runner.os == 'Linux'

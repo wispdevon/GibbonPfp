@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.24)
-project(GibbonPfp VERSION 1.0.2 LANGUAGES CXX)
+project(GibbonPfp VERSION 2.0.0 LANGUAGES CXX)
 set(GIBBON_BUILD_VERSION "${PROJECT_VERSION}" CACHE STRING "Version reported by the installed application")
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)

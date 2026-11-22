@@ -1,6 +1,6 @@
 pkgbase = gibbonpfp-git
 	pkgdesc = HeadshotFlow offline headshot editor and batch image processor
-	pkgver = 1.0.2
+	pkgver = 2.0.0
 	pkgrel = 1
 	url = https://github.com/wispdevon/GibbonPfp
 	arch = x86_64
