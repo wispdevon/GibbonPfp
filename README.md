@@ -24,9 +24,9 @@ The source repository remains at `wispdevon/GibbonPfp`.
 HeadshotFlow is an offline desktop editor and command-line tool for preparing profile
 pictures. Import portraits, adjust framing and brightness, optionally remove the
 background, and export a single photo or a batch without overwriting originals.
-The default output is **360 × 480 pixels, portrait 3:4**, with **70% crop zoom, 8% headroom, Fast background removal, white JPEG backdrop, JPEG quality 80, and Standard screen sharpening**.
+The default output is **up to 768 × 1024 pixels, portrait 3:4**, with **70% crop zoom, 8% headroom, Fast background removal, white JPEG backdrop, JPEG quality 80, and Standard screen sharpening**.
 
-![Native HeadshotFlow workspace with three checked sample portraits, the Frame tab, and a 360 × 480 Result](docs/images/workspace.png)
+![Native HeadshotFlow workspace with three checked sample portraits, the Frame tab, and the Result pane](docs/images/workspace.png)
 
 *Native Linux screenshot showing the three built-in sample portraits with Fast background removal.*
 
@@ -467,8 +467,8 @@ not a separate CLI flag.
 | `autoCrop` | `true` | Estimate a head-and-shoulders frame |
 | `cropZoom` | `70` | 40–100%; lower values widen automatic framing |
 | `headroom` | `0.08` | Requested fraction above the estimated head; 0–0.25 |
-| `capped` | `true` | Maximum 360 × 480 pixels |
-| `width`, `height` | `360`, `480` | Exact 3:4; both `0` for source-sized uncapped output |
+| `capped` | `true` | Maximum 768 × 1024 pixels |
+| `width`, `height` | `768`, `1024` | Exact 3:4; both `0` for source-sized uncapped output |
 | `brightness` | `0` | Gentle lightness shift, −1 to 1 |
 | `background` | `fast` | `off`, `fast`, or `quality` |
 | `feather` | `0` | Additional mask blur, 0–10 output pixels in the desktop |

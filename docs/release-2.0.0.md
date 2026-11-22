@@ -13,6 +13,8 @@ whole workflow before importing your own photos.
 - Use **Export as…** to choose the photos, output settings, and destination.
   **Quick Export** repeats the last successful export using the current
   photos in its remembered scope.
+- New photos default to a 768 × 1024 export limit. The size picker beside
+  **Quick Export** can cap the whole export at 480, 720, 1024, or 1440 px tall.
 - Workspace, queue, and photo menus fit on screen at the minimum window
   size and maximum interface scale.
 

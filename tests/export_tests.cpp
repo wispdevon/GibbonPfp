@@ -89,7 +89,7 @@ class ExportTests : public QObject {
         QVERIFY(c.startExport(options, local(dir.path()), false));
         QTRY_VERIFY_WITH_TIMEOUT(!c.busy(), 15000);
         QVERIFY(c.result().value("review").toBool());
-        QCOMPARE(c.result().value("width").toInt(), 360);
+        QCOMPARE(c.result().value("width").toInt(), 600);
         QVERIFY(!QFileInfo::exists(dir.filePath("portrait-pfp.jpg")));
         c.approve();
         QVERIFY(c.settings().value("approved").toBool());
@@ -230,6 +230,11 @@ class ExportTests : public QObject {
         QVERIFY(c.quickExport());
         QTRY_VERIFY_WITH_TIMEOUT(!c.busy(), 15000);
         QVERIFY(root.exists("mixed/second-pfp-1.png"));
+        const auto originalSettings = c.settings();
+        QVERIFY(c.quickExport(480));
+        QTRY_VERIFY_WITH_TIMEOUT(!c.busy(), 15000);
+        QCOMPARE(QImageReader(dir.filePath("mixed/second-pfp-2.png")).size(), QSize(360, 480));
+        QCOMPARE(c.settings(), originalSettings);
         QVERIFY(!root.exists("mixed/first-pfp-1.jpg"));
         auto loadedStyle = c.exportOptions(false).value("style").toMap();
         loadedStyle["prefix"] = "changed-";
@@ -294,6 +299,14 @@ class ExportTests : public QObject {
         auto *modal = window->findChild<QObject *>("exportDialog");
         QVERIFY(quick);
         QVERIFY(modal);
+        auto *quickSize = window->findChild<QObject *>("quickExportSize");
+        QVERIFY(quickSize && quickSize->setProperty("currentIndex", 2));
+        QVERIFY(QMetaObject::invokeMethod(quick, "clicked"));
+        QTRY_VERIFY(modal->property("visible").toBool());
+        QCOMPARE(modal->property("quickHeight").toInt(), 720);
+        QVERIFY(QMetaObject::invokeMethod(modal, "close"));
+        QTRY_VERIFY(!modal->property("visible").toBool());
+        QVERIFY(quickSize->setProperty("currentIndex", 0));
         QVERIFY(QMetaObject::invokeMethod(quick, "clicked"));
         QTRY_VERIFY(modal->property("visible").toBool());
         QCOMPARE(modal->property("scope").toString(), "current");

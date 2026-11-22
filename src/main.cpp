@@ -106,7 +106,7 @@ int main(int argc, char **argv) {
     p.addOptions({{{"o", "output"}, "Output folder", "directory"},
                   {"preset", "JSON settings preset", "file"},
                   {"size", "Exact 3:4 dimensions, e.g. 720x960", "WxH"},
-                  {"uncapped", "Remove 360x480 limit; use source crop size unless --size is set"},
+                  {"uncapped", "Remove 768x1024 limit; use source crop size unless --size is set"},
                   {"no-auto-crop", "Use centered 3:4 framing"},
                   {"fully-automatic", "Export uncertain crops using documented fallbacks"},
                   {"headroom", "Headroom percentage (0–25)", "percent"},

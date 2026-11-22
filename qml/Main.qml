@@ -742,12 +742,24 @@ ApplicationWindow {
                     color: muted; font.pixelSize: 11
                 }
                 Command { objectName: "exportAs"; text: "Export as…"; symbol: "exportAs"; enabled: hasPhoto&&!backend.busy; onClicked: exportDialog.begin(false) }
+                Choice {
+                    id: quickSize
+                    objectName: "quickExportSize"
+                    Layout.preferredWidth: 112
+                    enabled: hasPhoto && !backend.busy
+                    Accessible.name: "Quick Export size"
+                    Accessible.description: "Maximum height in pixels. Auto size uses the saved export or photo settings."
+                    readonly property var heights: [0, 480, 720, 1024, 1440]
+                    model: heights.map(height => height ? height + " px" : "Auto size")
+                    readonly property int selectedHeight: heights[currentIndex] || 0
+                    popup.y: -popup.height - 4
+                }
                 Command {
                     objectName: "quickExport"; text: "Quick Export"; symbol: "export"; primary: true
                     enabled: hasPhoto&&!backend.busy
                     hint: backend.quickExportDescription
                     Accessible.description: hint
-                    onClicked: exportDialog.begin(true)
+                    onClicked: exportDialog.begin(true, "", quickSize.selectedHeight)
                 }
             }
         }

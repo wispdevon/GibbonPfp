@@ -76,7 +76,7 @@ def main():
         assert not list((root / 'out').glob('*'))
         run('process', photo, '--output', root / 'out', '--fully-automatic', '--format', 'png')
         first = next((root / 'out').glob('*.png'))
-        assert struct.unpack('!II', first.read_bytes()[16:24]) == (360, 480)
+        assert struct.unpack('!II', first.read_bytes()[16:24]) == (600, 800)
         run('process', photo, '--output', root / 'out', '--fully-automatic', '--format', 'png')
         assert len(list((root / 'out').glob('*.png'))) == 2
         run('process', photo, '--output', root / 'source', '--no-auto-crop', '--uncapped', '--format', 'png')

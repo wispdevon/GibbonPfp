@@ -11,6 +11,7 @@ Dialog {
     property string scope: "current"
     property bool mixed: false
     property int sizeMode: 0
+    property int quickHeight: 0
     property url archiveToReplace
     property var style: ({})
     property var defaults: ({})
@@ -32,14 +33,15 @@ Dialog {
     readonly property string validation: !visible || perPhoto ? "" : controller.exportStyleError(style)
     readonly property var scopes: ["current", "checked", "zip"]
 
-    function begin(quick: bool, initialScope = "") {
+    function begin(quick: bool, initialScope = "", heightOverride = 0) {
         if (controller.busy || controller.current < 0)
             return
-        if (quick && controller.quickExport())
+        if (quick && controller.quickExport(heightOverride))
             return
         defaults = controller.exportOptions(quick)
         scope = initialScope || defaults.scope
         mixed = initialScope ? scope !== "current" : defaults.mixed
+        quickHeight = quick ? heightOverride : 0
         style = defaults.style
         sizeMode = sizeIndex()
         notice = defaults.notice
@@ -60,8 +62,9 @@ Dialog {
         error = ""
     }
     function sizeIndex(): int {
-        if (style.capped && (style.width === 0 || style.width === 360))
+        if (style.capped && (style.width === 0 || style.width === 768))
             return 0
+        if (style.width === 360) return 5
         if (!style.capped) {
             if (style.width === 0) return 1
             if (style.width === 720) return 2
@@ -71,7 +74,7 @@ Dialog {
     }
     function changeSize(row: int) {
         sizeMode = row
-        const requested = [360, 0, 720, 1080, 600][row]
+        const requested = [768, 0, 720, 1080, 600, 360][row]
         edit({ capped: row === 0, width: requested, height: requested / 3 * 4 })
     }
     function chooseDestination() {
@@ -86,7 +89,8 @@ Dialog {
         }
     }
     function deliver(destination: url, confirmedReplacement: bool) {
-        if (controller.startExport({ scope: scope, mixed: perPhoto, style: style },
+        if (controller.startExport({ scope: scope, mixed: perPhoto, style: style,
+                                     sizeOverrideHeight: quickHeight },
                                    destination, confirmedReplacement)) {
             close()
         } else {
@@ -192,12 +196,12 @@ Dialog {
             spacing: 12
             GridLayout {
                 Layout.fillWidth: true
-                columns: dialog.perPhoto ? 1 : 2
+                columns: dialog.perPhoto || dialog.quickHeight ? 1 : 2
                 uniformCellWidths: true
                 columnSpacing: 18
                 rowSpacing: 8
                 FieldLabel { text: "Photos" }
-                FieldLabel { visible: !dialog.perPhoto; text: "Output size" }
+                FieldLabel { visible: !dialog.perPhoto && !dialog.quickHeight; text: "Output size" }
 
                 WorkspaceChoice {
                     Layout.fillWidth: true
@@ -218,12 +222,16 @@ Dialog {
                     objectName: "exportSize"
                     Layout.preferredWidth: 1
                     Accessible.name: "Output size"
-                    visible: !dialog.perPhoto
-                    model: ["Up to 360 × 480", "Source crop size", "Up to 720 × 960",
-                            "Up to 1080 × 1440", "Custom limit"]
+                    visible: !dialog.perPhoto && !dialog.quickHeight
+                    model: ["Up to 768 × 1024", "Source crop size", "Up to 720 × 960",
+                            "Up to 1080 × 1440", "Custom limit", "Up to 360 × 480"]
                     currentIndex: dialog.sizeMode
                     onActivated: dialog.changeSize(currentIndex)
                 }
+            }
+            FieldLabel {
+                visible: dialog.quickHeight > 0
+                text: "Quick Export size · Up to " + dialog.quickHeight + " px tall"
             }
             FieldLabel {
                 visible: dialog.scope === "checked" &&
@@ -241,7 +249,7 @@ Dialog {
                 onClicked: dialog.mixed = checked
             }
             RowLayout {
-                visible: !dialog.perPhoto && dialog.sizeMode === 4
+                visible: !dialog.perPhoto && !dialog.quickHeight && dialog.sizeMode === 4
                 Layout.fillWidth: true
                 FieldLabel { Layout.fillWidth: false; text: "Maximum width" }
                 Field {
@@ -331,7 +339,8 @@ Dialog {
                 Layout.fillWidth: true
                 color: dialog.muted
                 font.pixelSize: 12
-                text: dialog.perPhoto ? "This export uses the output settings already assigned to each photo."
+                text: dialog.perPhoto ? (dialog.quickHeight ? "Each photo keeps its other output settings."
+                                                            : "This export uses the output settings already assigned to each photo.")
                       : "Editor preview · " + (dialog.controller.settings.format === "png" ? "PNG" : "JPEG")
                         + (dialog.controller.result.width
                            ? " · " + dialog.controller.result.width + " × " + dialog.controller.result.height : "")
@@ -349,7 +358,7 @@ Dialog {
             objectName: "saveExportPreset"
             Layout.leftMargin: 18
             text: "Save preset…"
-            visible: !dialog.perPhoto
+            visible: !dialog.perPhoto && !dialog.quickHeight
             enabled: !dialog.validation
             onClicked: presetPicker.open()
         }

@@ -686,12 +686,13 @@ bool Controller::archiveExists(const QUrl &destination) const {
     const QFileInfo info(destination.toLocalFile());
     return info.exists() || info.isSymLink();
 }
-bool Controller::quickExport() {
+bool Controller::quickExport(int height) {
     if (working || index < 0 || exportHistory.isEmpty())
         return false;
-    const auto options = exportOptions(true);
+    auto options = exportOptions(true);
     if (!options.value("notice").toString().isEmpty())
         return false;
+    options["sizeOverrideHeight"] = height;
     return startExport(options, QUrl::fromLocalFile(exportHistory.value("destination").toString()));
 }
 bool Controller::startExport(const QVariantMap &options, const QUrl &destination, bool replaceArchive) {
@@ -731,6 +732,11 @@ bool Controller::startExportRequest(const QVariantMap &options, const QUrl &dest
         }
     }
     const bool mixed = scope != "current" && options.value("mixed").toBool();
+    const auto height = options.value("sizeOverrideHeight", 0).toInt();
+    if (height < 0 || height > 80000 || height % 4 != 0) {
+        fail("Choose a valid 3:4 output size");
+        return false;
+    }
     QVariantMap style;
     try {
         style = mixed ? outputStyle(queue[index].settings) :
@@ -740,6 +746,7 @@ bool Controller::startExportRequest(const QVariantMap &options, const QUrl &dest
         return false;
     }
     QVariantMap request = {{"scope", scope}, {"mixed", mixed}, {"style", style},
+                           {"sizeOverrideHeight", height},
                            {"destination", info.absoluteFilePath()},
                            {"folder", zip ? exportHistory.value("folder") : info.absoluteFilePath()}};
     processMany(rows, request, replaceArchive, createFolder);
@@ -785,6 +792,7 @@ void Controller::processMany(QVector<int> rows, const QVariantMap &exportRequest
                                  exportRequest.value("destination").toString());
         if (result.exported && !exportRequest.isEmpty()) {
             exportHistory = exportRequest;
+            exportHistory.remove("sizeOverrideHeight");
             QSettings().setValue("exportHistory", exportHistory);
             presetOutputPending = false;
         }
@@ -796,6 +804,7 @@ void Controller::processMany(QVector<int> rows, const QVariantMap &exportRequest
       try {
         const bool sharedStyle = !exportRequest.isEmpty() && !exportRequest.value("mixed").toBool();
         const auto style = exportRequest.value("style").toMap();
+        const auto height = exportRequest.value("sizeOverrideHeight").toInt();
         const auto sharedSettings = readOutputStyle(style);
         if (exportFiles && !zip && !createFolder && !QFileInfo(directory).isDir())
             throw std::runtime_error("The chosen output folder is no longer available");
@@ -821,8 +830,14 @@ void Controller::processMany(QVector<int> rows, const QVariantMap &exportRequest
             const auto &q = snapshot[row];
             try {
                 auto settings = q.settings;
-                const bool matchesPreview = !sharedStyle || style == outputStyle(settings);
                 if (sharedStyle) applyOutputStyle(settings, sharedSettings);
+                if (height > 0) {
+                    settings.capped = false;
+                    settings.height = height;
+                    settings.width = height / 4 * 3;
+                }
+                const bool matchesPreview = (!sharedStyle && height == 0) ||
+                                            outputStyle(settings) == outputStyle(q.settings);
                 auto r = engine.process(q.path, settings, &cancelled, progressCallback(token, photo, rows.size()));
                 QString output;
                 if (r.review)

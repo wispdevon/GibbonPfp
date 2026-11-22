@@ -301,7 +301,7 @@ cv::Mat Engine::sharpenForScreen(const cv::Mat &rgb, const cv::Mat &alpha, const
 QSize Engine::outputSize(QSize crop, const Settings &s) {
     int units = std::min(crop.width() / 3, crop.height() / 4);
     if (s.capped)
-        units = std::min(units, 120);
+        units = std::min(units, Settings::defaultHeight / 4);
     if (s.width > 0)
         units = std::min(units, s.width / 3);
     if (units < 1)

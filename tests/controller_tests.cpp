@@ -822,7 +822,7 @@ class ControllerTests : public QObject {
         QVERIFY(sampleExport.isValid());
         c.exportCurrent(QUrl::fromLocalFile(sampleExport.path()));
         QTRY_VERIFY_WITH_TIMEOUT(!c.busy(), 15000);
-        QCOMPARE(QImage(sampleExport.filePath("gibbon-sample-pfp.jpg")).size(), QSize(360, 480));
+        QCOMPARE(QImage(sampleExport.filePath("gibbon-sample-pfp.jpg")).size(), QSize(768, 1024));
         c.set("background", "quality");
         c.preview();
         QVERIFY(c.qualityConfirmationPending());
@@ -1573,8 +1573,8 @@ class ControllerTests : public QObject {
         QVERIFY(!c.queue[0].selected);
         QCOMPARE(Controller::sourceFingerprint(legacy), previous);
         QVERIFY(Controller::sourceFingerprint(third) != conflict);
-        QCOMPARE(c.result()["width"].toInt(), 360);
-        QCOMPARE(c.result()["height"].toInt(), 480);
+        QCOMPARE(c.result()["width"].toInt(), 768);
+        QCOMPARE(c.result()["height"].toInt(), 1024);
 
         auto thumbnail = [&](int row) {
             const QUrl url(c.items()[row].toMap()["thumb"].toString());

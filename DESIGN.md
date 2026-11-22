@@ -127,7 +127,7 @@ High Quality consent and processing caches never persist.
 
 ## Batch editing and delivery
 
-Factory settings use a 360 × 480 cap, 70% crop zoom, 8% headroom, Fast removal,
+Factory settings use a 768 × 1024 cap, 70% crop zoom, 8% headroom, Fast removal,
 white JPEG at quality 80, and Standard screen sharpening. Edits affect the open
 photo. **Apply to all** confirms its scope before copying the open photo’s
 controls to every queued photo, clearing their manual framing and strokes,
@@ -157,6 +157,10 @@ Cancel discards unfinished export choices.
 **Quick Export** uses the last successful export settings and destination. Use
 the current photo's profile settings for the first export or the output settings
 from an explicitly loaded preset. Show which photos the action will target.
+Put a height selector beside Quick Export. Auto size follows the saved export
+or photo settings. Explicit 480, 720, 1024, and 1440 px choices cap all targeted
+photos at the selected height. Retain the choice while the workspace is open,
+including when the destination dialog is needed.
 Open **Export as…** when a destination is needed. Preserve existing archives
 when repeating a ZIP export. Every queued photo must pass processing and review
 before publishing the complete ZIP with its export report.

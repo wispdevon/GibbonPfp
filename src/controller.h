@@ -124,7 +124,7 @@ class Controller : public QObject {
     Q_INVOKABLE QVariantMap exportOptions(bool quick) const;
     Q_INVOKABLE QString exportStyleError(const QVariantMap &style) const;
     Q_INVOKABLE bool archiveExists(const QUrl &destination) const;
-    Q_INVOKABLE bool quickExport();
+    Q_INVOKABLE bool quickExport(int height = 0);
     Q_INVOKABLE bool startExport(const QVariantMap &options, const QUrl &destination,
                                  bool replaceArchive = false);
     Q_INVOKABLE void cancel();

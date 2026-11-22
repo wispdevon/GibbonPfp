@@ -383,7 +383,7 @@ class CoreTests : public QObject {
         engine.setDevice("cpu");
         const auto original = engine.process(sample, s);
         QVERIFY2(original.warnings.isEmpty(), qPrintable(original.warnings.join("; ")));
-        QCOMPARE(original.outputSize, QSize(360, 480));
+        QCOMPARE(original.outputSize, QSize(768, 1024));
         for (const auto &detail : {"face", "head · fast"})
             QVERIFY(std::any_of(original.timings.cbegin(), original.timings.cend(),
                                 [detail](const auto &timing) {
@@ -409,11 +409,12 @@ class CoreTests : public QObject {
             const Settings settings;
             const auto result = engine.process(path, settings);
             QVERIFY2(!result.review, qPrintable(path + " " + result.warnings.join(", ")));
-            QCOMPARE(result.outputSize, QSize(360, 480));
+            QCOMPARE(result.outputSize.width() * 4, result.outputSize.height() * 3);
+            QVERIFY(result.outputSize.height() <= 1024);
             const auto output = Engine::save(result, path, dir.path(), settings);
-            QCOMPARE(QImage(output).size(), QSize(360, 480));
+            QCOMPARE(QImage(output).size(), result.outputSize);
             QVERIFY(result.mask.pixelColor(0, 0).red() < 10);
-            QVERIFY(result.mask.pixelColor(180, 200).red() > 245);
+            QVERIFY(result.mask.pixelColor(result.mask.width() / 2, result.mask.height() * 5 / 12).red() > 245);
         }
     }
     void lightweightMaskRefinement() {
@@ -475,7 +476,9 @@ class CoreTests : public QObject {
     }
     void dimensions() {
         Settings s;
-        QCOMPARE(Engine::outputSize({4000, 6000}, s), QSize(360, 480));
+        QCOMPARE(Engine::outputSize({4000, 6000}, s), QSize(768, 1024));
+        const auto saved = Settings::fromJson({{"width", 360}, {"height", 480}, {"capped", true}});
+        QCOMPARE(Engine::outputSize({4000, 6000}, saved), QSize(360, 480));
         QCOMPARE(Engine::outputSize({100, 150}, s), QSize(99, 132));
         s.capped = false;
         s.width = s.height = 0;
@@ -531,7 +534,7 @@ class CoreTests : public QObject {
         s.background = "off";
         Engine engine;
         auto r = engine.process(input, s);
-        QCOMPARE(r.outputSize, QSize(360, 480));
+        QCOMPARE(r.outputSize, QSize(600, 800));
         QVERIFY(!r.review);
         QCOMPARE(r.preview, QImage::fromData(r.encoded));
         QVERIFY(r.preview.colorSpace().isValid());
@@ -593,7 +596,7 @@ class CoreTests : public QObject {
         s.background = "fast";
         s.format = "png";
         r = e.process(path, s);
-        QCOMPARE(r.outputSize, QSize(360, 480));
+        QCOMPARE(r.outputSize, QSize(600, 800));
     }
 };
 QTEST_GUILESS_MAIN(CoreTests)

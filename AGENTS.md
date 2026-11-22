@@ -5,7 +5,7 @@ C++20 / Qt Quick desktop application with a shared CLI image engine. Follow the
 for UI changes, and [README.md](README.md) for build commands.
 
 - Keep GUI and CLI processing in `gibbon_core`; never duplicate image math in QML.
-- Default dimensions are width 360 × height 480, portrait 3:4.
+- Default dimensions are capped at width 768 × height 1024, portrait 3:4.
 - Preserve source photos and review gates; manual approval is per image.
 - Keep model URLs and SHA-256 hashes pinned in the manifest. Do not commit ONNX files.
 - Run GUI tests, app launches for inspection, and screenshot captures on a virtual display or a verified empty, inactive Hyprland workspace. Keep focus on the user's current workspace.

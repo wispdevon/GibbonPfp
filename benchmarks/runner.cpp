@@ -68,6 +68,8 @@ int main(int argc, char **argv) {
             painter.drawText(col * 360 + 8, 25, QStringList{"Source", "Mask", "Black", "White"}[col]);
         Engine engine;
         Settings settings;
+        settings.width = 360;
+        settings.height = 480;
         settings.background = mode;
         settings.format = "png";
         settings.cropZoom = 65;

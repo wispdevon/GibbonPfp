@@ -7,11 +7,13 @@
 
 namespace gibbon {
 struct Settings {
+    static constexpr int defaultHeight = 1024;
+    static constexpr int defaultWidth = defaultHeight / 4 * 3;
     bool autoCrop = true, capped = true, automatic = false, approved = false;
     bool sharpenScreen = true;
     QString sharpening = "standard";
     QRectF cropBasis; // Initial framing used as the 100% zoom baseline.
-    int width = 360, height = 480, quality = 80, rotation = 0;
+    int width = defaultWidth, height = defaultHeight, quality = 80, rotation = 0;
     double cropZoom = 70; // Requested percentage, preserved when headroom changes.
     double headroom = .08, brightness = 0, feather = 0;
     QString background = "fast", format = "jpeg", reference, prefix;

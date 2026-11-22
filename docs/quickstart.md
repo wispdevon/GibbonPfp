@@ -35,7 +35,7 @@ installed build.
    destination, and confirm. In Linux’s native folder picker, a typed path may
    navigate into that directory, so select the intended folder and click **Open**.
    The output folder includes a JSON report. The default is a JPEG capped at
-   360 × 480 pixels. When you choose a shared style, **Export as…**
+   768 × 1024 pixels. When you choose a shared style, **Export as…**
    also lets you choose another size, PNG, filename prefix, JPEG quality and
    backdrop, and screen sharpening.
 
@@ -65,6 +65,10 @@ prefix, and related settings. Turn it off to choose one shared output style for 
 batch. **Quick Export** repeats the last successful export’s scope, settings, and
 destination. If that destination is unavailable, it opens **Export as…** to choose
 another. If the remembered ZIP already exists, the dialog asks before replacing it.
+The selector beside **Quick Export** offers maximum heights of **480**, **720**,
+**1024**, and **1440 px** for all photos in the export. Photos keep their 3:4
+ratio and smaller crops stay at their available size. Choose **Auto size** to
+follow the saved export or photo settings again.
 
 Loading a preset with **Workspace actions → Load preset…** changes the open
 photo’s settings. It does not change the other photos or future-import defaults.
