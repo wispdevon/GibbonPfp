@@ -256,6 +256,7 @@ class ExportTests : public QObject {
         QVERIFY(c.message().contains("source photo"));
         QVERIFY(c.startExport(batch, zip, false));
         QTRY_VERIFY_WITH_TIMEOUT(!c.busy(), 15000);
+        QVERIFY2(c.message().startsWith("ZIP saved"), qPrintable(c.message()));
         QCOMPARE(c.quickExportScope(), "Queue ZIP");
         QFile archive(zip.toLocalFile());
         QVERIFY(archive.open(QIODevice::ReadOnly));

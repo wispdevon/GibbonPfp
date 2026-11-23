@@ -13,9 +13,10 @@
 #include <QSettings>
 #include <QStandardPaths>
 #include <QStyleHints>
-#include <QTemporaryFile>
+#include <QTemporaryDir>
 #include <QtConcurrent>
 #include <algorithm>
+#include <optional>
 
 using namespace gibbon;
 static QVariantMap outputStyle(const Settings &settings) {
@@ -276,7 +277,11 @@ void Controller::loadSample() {
         if (sample.cached)
             continue;
         // QFile::copy protects a destination created by another instance.
-        QFile::copy(sample.resource, sample.photo.path);
+        if (QFile::copy(sample.resource, sample.photo.path)) {
+            // Resources are read-only. Keep local cache copies removable on Windows.
+            QFile cached(sample.photo.path);
+            cached.setPermissions(cached.permissions() | QFileDevice::WriteOwner);
+        }
         const QFileInfo file(sample.photo.path);
         if (!file.isFile() || sourceFingerprint(sample.photo.path) != sample.photo.fingerprint) {
             cacheError(file);
@@ -808,17 +813,18 @@ void Controller::processMany(QVector<int> rows, const QVariantMap &exportRequest
         const auto sharedSettings = readOutputStyle(style);
         if (exportFiles && !zip && !createFolder && !QFileInfo(directory).isDir())
             throw std::runtime_error("The chosen output folder is no longer available");
-        QTemporaryFile stagedArchive;
+        std::optional<QTemporaryDir> staging;
+        auto archivePath = directory;
         std::unique_ptr<ZipExport> archive;
         if (zip) {
             if (!replaceArchive) {
                 // Publish a new archive without replacing a path created during processing.
-                stagedArchive.setFileTemplate(QFileInfo(directory).absoluteDir().filePath(".gibbon-XXXXXX"));
-                if (!stagedArchive.open())
-                    throw std::runtime_error(stagedArchive.errorString().toStdString());
-                stagedArchive.close();
+                staging.emplace(QFileInfo(directory).absoluteDir().filePath(".gibbon-XXXXXX"));
+                if (!staging->isValid())
+                    throw std::runtime_error(staging->errorString().toStdString());
+                archivePath = staging->filePath("export.zip");
             }
-            archive = std::make_unique<ZipExport>(replaceArchive ? directory : stagedArchive.fileName(), &cancelled);
+            archive = std::make_unique<ZipExport>(archivePath, &cancelled);
         }
         int done = 0, held = 0, failed = 0;
         QJsonArray report;
@@ -916,7 +922,7 @@ void Controller::processMany(QVector<int> rows, const QVariantMap &exportRequest
                     .arg(held).arg(failed).arg(cancelled ? " · cancelled" : "")};
             progressCallback(token, rows.size(), rows.size())({"Writing ZIP", "Finalizing archive"});
             archive->commit(QJsonDocument(report).toJson());
-            if (!replaceArchive && (cancelled || !QFile::rename(stagedArchive.fileName(), directory)))
+            if (!replaceArchive && (cancelled || !QFile::rename(archivePath, directory)))
                 throw std::runtime_error(cancelled ? "Cancelled" : "Could not save ZIP to the chosen destination");
             QMetaObject::invokeMethod(this, [this, rows, token] {
                 if (token != operation) return;
