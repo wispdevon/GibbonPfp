@@ -7,7 +7,7 @@
 #include <filesystem>
 #include <stdexcept>
 
-namespace gibbon {
+namespace headshotflow {
 QJsonObject Settings::json() const {
     return {{"version", 1},
             {"autoCrop", autoCrop},
@@ -187,4 +187,4 @@ bool sameExistingFile(const QString &first, const QString &second) {
 QString errorText(const std::exception &e) {
     return QString::fromUtf8(e.what());
 }
-} // namespace gibbon
+} // namespace headshotflow

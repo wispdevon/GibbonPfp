@@ -21,7 +21,7 @@ def png(path, width, height):
 
 def main():
     exe = str(pathlib.Path(sys.argv[1]).resolve())
-    with tempfile.TemporaryDirectory(prefix='gibbon-cli-') as temp:
+    with tempfile.TemporaryDirectory(prefix='headshotflow-cli-') as temp:
         root = pathlib.Path(temp)
         photo = root / 'portrait ü.png'
         png(photo, 600, 800)

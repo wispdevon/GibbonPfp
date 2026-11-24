@@ -1,7 +1,7 @@
 #pragma once
 #include <QImage>
 #include <QString>
-namespace gibbon {
+namespace headshotflow {
 QImage decodeTiff(const QString &path);
 QImage decodeWebp(const QString &path);
-} // namespace gibbon
+} // namespace headshotflow

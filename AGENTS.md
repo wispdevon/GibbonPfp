@@ -4,7 +4,7 @@ C++20 / Qt Quick desktop application with a shared CLI image engine. Follow the
 [project design](DESIGN.md) and [shared workspace design](docs/shared/DESIGN.md)
 for UI changes, and [README.md](README.md) for build commands.
 
-- Keep GUI and CLI processing in `gibbon_core`; never duplicate image math in QML.
+- Keep GUI and CLI processing in `headshotflow_core`; never duplicate image math in QML.
 - Default dimensions are capped at width 768 × height 1024, portrait 3:4.
 - Preserve source photos and review gates; manual approval is per image.
 - Keep model URLs and SHA-256 hashes pinned in the manifest. Do not commit ONNX files.

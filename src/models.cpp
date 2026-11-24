@@ -1,4 +1,5 @@
 #include "models.h"
+#include "legacy_storage.h"
 #include <QCoreApplication>
 #include <QCryptographicHash>
 #include <QDir>
@@ -20,17 +21,20 @@
 #include <opencv2/imgproc.hpp>
 #include <stdexcept>
 
-namespace gibbon {
+namespace headshotflow {
 static QStringList roots() {
     QStringList r;
-    if (!qEnvironmentVariable("GIBBON_MODEL_DIR").isEmpty())
-        r << qEnvironmentVariable("GIBBON_MODEL_DIR");
+    if (!qEnvironmentVariable("HEADSHOTFLOW_MODEL_DIR").isEmpty())
+        r << qEnvironmentVariable("HEADSHOTFLOW_MODEL_DIR");
     r << QStandardPaths::writableLocation(QStandardPaths::AppLocalDataLocation) + "/models"
       << QCoreApplication::applicationDirPath() + "/models"
-      << QCoreApplication::applicationDirPath() + "/../share/gibbonpfp/models"
+      << QCoreApplication::applicationDirPath() + "/../share/headshotflow/models"
       << QCoreApplication::applicationDirPath() + "/../Resources/models";
-    if (!qEnvironmentVariableIsSet("GIBBON_DISABLE_SOURCE_MODELS"))
-        r << QString::fromUtf8(GIBBON_SOURCE_MODELS);
+    const auto legacy = legacyLocation(QStandardPaths::AppLocalDataLocation);
+    if (!legacy.isEmpty())
+        r << legacy + "/models";
+    if (!qEnvironmentVariableIsSet("HEADSHOTFLOW_DISABLE_SOURCE_MODELS"))
+        r << QString::fromUtf8(HEADSHOTFLOW_SOURCE_MODELS);
     return r;
 }
 QJsonArray Models::manifest() {
@@ -60,7 +64,7 @@ QString Models::locate(const QString &id) {
     }
     throw std::runtime_error(
         ("Model '" + id +
-         "' is missing or damaged. Install it from Models or run: gibbonpfp models install " + id)
+         "' is missing or damaged. Install it from Models or run: headshotflow models install " + id)
             .toStdString());
 }
 QString Models::install(const QString &id, std::atomic_bool *cancel,
@@ -217,7 +221,7 @@ Ort::Session &Models::session(const QString &id) {
         if (!sessions.contains(id)) {
             sessions[id] = create(false);
             setDevice(id, cpuFallback.contains(id) ? "CPU (" + fallbackReasons[id] + "; see Technical details)" :
-                          cpuRequested() ? (qEnvironmentVariable("GIBBON_INFERENCE_DEVICE") == "cpu" ? "CPU (launch override)" : "CPU (selected in Models)") : "CPU (this runtime has no CUDA provider)");
+                          cpuRequested() ? (qEnvironmentVariable("HEADSHOTFLOW_INFERENCE_DEVICE") == "cpu" ? "CPU (launch override)" : "CPU (selected in Models)") : "CPU (this runtime has no CUDA provider)");
         }
         if (id == "quality")
             qualityLoaded.store(true);
@@ -409,4 +413,4 @@ cv::Mat Models::mask(const cv::Mat &rgb, const QString &method, const QString &p
     cache.put(cacheKey(rgb, method, purpose), result);
     return result;
 }
-} // namespace gibbon
+} // namespace headshotflow

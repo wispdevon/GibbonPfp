@@ -9,7 +9,7 @@
 #include <webp/decode.h>
 #include <webp/demux.h>
 
-namespace gibbon {
+namespace headshotflow {
 static QImage orient(QImage i, int o) {
     QTransform t;
     switch (o) {
@@ -177,4 +177,4 @@ QImage decodeWebp(const QString &path) {
     }
     return image;
 }
-} // namespace gibbon
+} // namespace headshotflow

@@ -43,7 +43,7 @@ class ControllerTests : public QObject {
         QSettings::setDefaultFormat(QSettings::IniFormat);
         QSettings::setPath(QSettings::IniFormat, QSettings::UserScope, config.path());
         QQuickStyle::setStyle("Fusion");
-        loadWorkspaceFonts(GIBBON_SOURCE_DIR "/assets/fonts");
+        loadWorkspaceFonts(HEADSHOTFLOW_SOURCE_DIR "/assets/fonts");
     }
     void queueDefaultsAndCompleteZip() {
         QTemporaryDir dir;
@@ -78,7 +78,9 @@ class ControllerTests : public QObject {
         other.loadSession(session); QTRY_VERIFY_WITH_TIMEOUT(!other.busy(), 15000);
         QCOMPARE(other.importDefaults.brightness, .3);
         QCOMPARE(Controller::validateRecovery(QJsonDocument(c.recoveryJson()).toJson())["importDefaults"].toObject()["brightness"].toDouble(), .3);
-        auto old = c.recoveryJson(); old.remove("importDefaults");
+        auto old = c.recoveryJson();
+        old["kind"] = "gibbon-recovery";
+        old.remove("importDefaults");
         QVERIFY(!Controller::validateRecovery(QJsonDocument(old).toJson()).isEmpty());
         c.exportZip(QUrl::fromLocalFile(first));
         QVERIFY(c.message().contains("other than a source photo"));
@@ -162,17 +164,17 @@ class ControllerTests : public QObject {
     }
     void highQualityConsentAndCache() {
         QTemporaryDir dir;
-        const auto priorModelDir = qgetenv("GIBBON_MODEL_DIR");
-        const bool hadModelDir = qEnvironmentVariableIsSet("GIBBON_MODEL_DIR");
+        const auto priorModelDir = qgetenv("HEADSHOTFLOW_MODEL_DIR");
+        const bool hadModelDir = qEnvironmentVariableIsSet("HEADSHOTFLOW_MODEL_DIR");
         const auto restore = qScopeGuard([&] {
             if (hadModelDir)
-                qputenv("GIBBON_MODEL_DIR", priorModelDir);
+                qputenv("HEADSHOTFLOW_MODEL_DIR", priorModelDir);
             else
-                qunsetenv("GIBBON_MODEL_DIR");
+                qunsetenv("HEADSHOTFLOW_MODEL_DIR");
         });
         // Use the small face graph as a deliberately incompatible quality graph.
         // It loads a real ONNX session without allocating the full portrait model.
-        QFile source(GIBBON_SOURCE_DIR "/assets/models/face_detection_yunet_2023mar.onnx");
+        QFile source(HEADSHOTFLOW_SOURCE_DIR "/assets/models/face_detection_yunet_2023mar.onnx");
         QVERIFY(source.open(QIODevice::ReadOnly));
         auto bytes = source.readAll();
         const auto modelPath = dir.filePath("test-session.onnx");
@@ -185,7 +187,7 @@ class ControllerTests : public QObject {
             {"file", "test-session.onnx"},
             {"sha256", QString::fromLatin1(
                            QCryptographicHash::hash(bytes, QCryptographicHash::Sha256).toHex())}};
-        auto entries = gibbon::Models::manifest();
+        auto entries = headshotflow::Models::manifest();
         for (auto i = 0; i < entries.size(); ++i)
             if (entries[i].toObject()["id"] == "quality")
                 entries.replace(i, entry);
@@ -193,7 +195,7 @@ class ControllerTests : public QObject {
         QVERIFY(manifest.open(QIODevice::WriteOnly));
         manifest.write(QJsonDocument(QJsonObject{{"models", entries}}).toJson());
         manifest.close();
-        qputenv("GIBBON_MODEL_DIR", dir.path().toUtf8());
+        qputenv("HEADSHOTFLOW_MODEL_DIR", dir.path().toUtf8());
         ImageStore images;
         Controller c(&images);
         QSignalSpy confirmation(&c, &Controller::highQualityConfirmationRequested);
@@ -388,7 +390,7 @@ class ControllerTests : public QObject {
         QVERIFY(Controller::validateRecovery(file.readAll())["photos"].toArray().isEmpty());
     }
     void recoveryCrashWriter() {
-        const auto directory = qEnvironmentVariable("GIBBON_CRASH_RECOVERY_DIR");
+        const auto directory = qEnvironmentVariable("HEADSHOTFLOW_CRASH_RECOVERY_DIR");
         if (directory.isEmpty()) QSKIP("Subprocess helper");
         ImageStore images;
         Controller c(&images, nullptr, directory);
@@ -411,7 +413,7 @@ class ControllerTests : public QObject {
         QTemporaryDir root;
         QProcess child;
         auto env = QProcessEnvironment::systemEnvironment();
-        env.insert("GIBBON_CRASH_RECOVERY_DIR", root.path());
+        env.insert("HEADSHOTFLOW_CRASH_RECOVERY_DIR", root.path());
         child.setProcessEnvironment(env);
         child.start(QCoreApplication::applicationFilePath(), {"recoveryCrashWriter"});
         QVERIFY(child.waitForStarted());
@@ -500,7 +502,7 @@ class ControllerTests : public QObject {
         Controller c(images, nullptr, root.path());
         c.setUiScale(150);
         qml.rootContext()->setContextProperty("backend", &c);
-        qml.load(QUrl::fromLocalFile(GIBBON_SOURCE_DIR "/qml/Main.qml"));
+        qml.load(QUrl::fromLocalFile(HEADSHOTFLOW_SOURCE_DIR "/qml/Main.qml"));
         QVERIFY(!qml.rootObjects().isEmpty());
         auto *window = qobject_cast<QQuickWindow *>(qml.rootObjects().front());
         QVERIFY(window); window->resize(1024, 720); window->show();
@@ -508,7 +510,7 @@ class ControllerTests : public QObject {
         auto *dialog = window->findChild<QObject *>("recoveryDialog");
         QVERIFY(dialog); QVERIFY(dialog->property("visible").toBool());
         QVERIFY(dialog->property("height").toDouble() * 1.5 <= 720);
-        const auto captures = qEnvironmentVariable("GIBBON_TEST_SCREENSHOTS");
+        const auto captures = qEnvironmentVariable("HEADSHOTFLOW_TEST_SCREENSHOTS");
         if (!captures.isEmpty()) { QDir().mkpath(captures); QVERIFY(window->grabWindow().save(captures + "/recovery-150.png")); }
         c.resolveRecovery(true);
         QVERIFY(!dialog->property("visible").toBool());
@@ -534,7 +536,7 @@ class ControllerTests : public QObject {
         qml.addImageProvider("photos", images);
         Controller c(images);
         qml.rootContext()->setContextProperty("backend", &c);
-        qml.load(QUrl::fromLocalFile(GIBBON_SOURCE_DIR "/qml/Main.qml"));
+        qml.load(QUrl::fromLocalFile(HEADSHOTFLOW_SOURCE_DIR "/qml/Main.qml"));
         QVERIFY(!qml.rootObjects().isEmpty());
         auto *window = qobject_cast<QQuickWindow *>(qml.rootObjects().first());
         QVERIFY(window);
@@ -553,7 +555,7 @@ class ControllerTests : public QObject {
         QCOMPARE(crop->property("color").value<QColor>(), QColor(Qt::transparent));
         QCOMPARE(stroke->property("color").value<QColor>(), QColor(Qt::transparent));
         QCOMPARE(focusStroke->property("color").value<QColor>(), QColor(Qt::transparent));
-        const auto sourcePixels = gibbon::Engine::decode(path, {});
+        const auto sourcePixels = headshotflow::Engine::decode(path, {});
         auto verifyOutput = [&] {
             QCOMPARE(source->property("source").toUrl(),
                      QUrl(QString("image://photos/source?%1").arg(c.revision())));
@@ -597,7 +599,7 @@ class ControllerTests : public QObject {
         QTRY_VERIFY_WITH_TIMEOUT(!c.busy(), 15000);
         verifyOutput();
         const auto outputSize = QSize(c.result()["width"].toInt(), c.result()["height"].toInt());
-        const QString captures = qEnvironmentVariable("GIBBON_TEST_SCREENSHOTS");
+        const QString captures = qEnvironmentVariable("HEADSHOTFLOW_TEST_SCREENSHOTS");
         if (!captures.isEmpty())
             QDir().mkpath(captures);
         QVERIFY(!window->findChild<QQuickItem *>("maskHold"));
@@ -822,7 +824,7 @@ class ControllerTests : public QObject {
         QVERIFY(sampleExport.isValid());
         c.exportCurrent(QUrl::fromLocalFile(sampleExport.path()));
         QTRY_VERIFY_WITH_TIMEOUT(!c.busy(), 15000);
-        QCOMPARE(QImage(sampleExport.filePath("gibbon-sample-pfp.jpg")).size(), QSize(768, 1024));
+        QCOMPARE(QImage(sampleExport.filePath("headshotflow-sample-pfp.jpg")).size(), QSize(768, 1024));
         c.set("background", "quality");
         c.preview();
         QVERIFY(c.qualityConfirmationPending());
@@ -867,7 +869,7 @@ class ControllerTests : public QObject {
         qml.addImageProvider("photos", images);
         Controller c(images, nullptr, {}, false);
         qml.rootContext()->setContextProperty("backend", &c);
-        qml.load(QUrl::fromLocalFile(GIBBON_SOURCE_DIR "/qml/Main.qml"));
+        qml.load(QUrl::fromLocalFile(HEADSHOTFLOW_SOURCE_DIR "/qml/Main.qml"));
         QVERIFY(!qml.rootObjects().isEmpty());
         auto *window = qobject_cast<QQuickWindow *>(qml.rootObjects().front());
         QVERIFY(window);
@@ -877,7 +879,7 @@ class ControllerTests : public QObject {
         c.loadSample();
         QTRY_VERIFY_WITH_TIMEOUT(!c.busy(), 15000);
 
-        const auto captures = qEnvironmentVariable("GIBBON_TEST_SCREENSHOTS");
+        const auto captures = qEnvironmentVariable("HEADSHOTFLOW_TEST_SCREENSHOTS");
         if (!captures.isEmpty())
             QVERIFY(QDir().mkpath(captures));
         const QList<QPair<QSize, int>> cases = {
@@ -959,7 +961,7 @@ class ControllerTests : public QObject {
         c.setDark(true);
         c.setUiScale(150);
         qml.rootContext()->setContextProperty("backend", &c);
-        qml.load(QUrl::fromLocalFile(GIBBON_SOURCE_DIR "/qml/Main.qml"));
+        qml.load(QUrl::fromLocalFile(HEADSHOTFLOW_SOURCE_DIR "/qml/Main.qml"));
         QVERIFY(!qml.rootObjects().isEmpty());
         auto *window = qobject_cast<QQuickWindow *>(qml.rootObjects().front());
         QVERIFY(window);
@@ -971,7 +973,7 @@ class ControllerTests : public QObject {
         auto *menu = window->findChild<QObject *>("workspaceMenu");
         QVERIFY(trigger && menu);
         const QSet<QString> needsPhoto = {"Save session…", "Load preset…", "Save preset…"};
-        const auto captures = qEnvironmentVariable("GIBBON_TEST_SCREENSHOTS");
+        const auto captures = qEnvironmentVariable("HEADSHOTFLOW_TEST_SCREENSHOTS");
         for (const bool loaded : {false, true}) {
             if (loaded) {
                 c.loadSample();
@@ -1012,7 +1014,7 @@ class ControllerTests : public QObject {
         c.setUiScale(100);
         c.setDark(false);
         qml.rootContext()->setContextProperty("backend", &c);
-        qml.load(QUrl::fromLocalFile(GIBBON_SOURCE_DIR "/qml/Main.qml"));
+        qml.load(QUrl::fromLocalFile(HEADSHOTFLOW_SOURCE_DIR "/qml/Main.qml"));
         QVERIFY(!qml.rootObjects().isEmpty());
         auto *window = qobject_cast<QQuickWindow *>(qml.rootObjects().front());
         QVERIFY(window);
@@ -1053,7 +1055,7 @@ class ControllerTests : public QObject {
             QVERIFY(QRect(QPoint{}, window->size()).contains(point));
             QTest::mouseClick(window, Qt::LeftButton, Qt::NoModifier, point);
         };
-        const auto captures = qEnvironmentVariable("GIBBON_TEST_SCREENSHOTS");
+        const auto captures = qEnvironmentVariable("HEADSHOTFLOW_TEST_SCREENSHOTS");
         auto capture = [&](const QString &name) {
             if (!captures.isEmpty()) {
                 QVERIFY(QDir().mkpath(captures));
@@ -1168,7 +1170,7 @@ class ControllerTests : public QObject {
         Controller c(images, nullptr, {}, false);
         c.setUiScale(100);
         qml.rootContext()->setContextProperty("backend", &c);
-        qml.load(QUrl::fromLocalFile(GIBBON_SOURCE_DIR "/qml/Main.qml"));
+        qml.load(QUrl::fromLocalFile(HEADSHOTFLOW_SOURCE_DIR "/qml/Main.qml"));
         QVERIFY(!qml.rootObjects().isEmpty());
         auto *window = qobject_cast<QQuickWindow *>(qml.rootObjects().front());
         QVERIFY(window);
@@ -1189,7 +1191,7 @@ class ControllerTests : public QObject {
             QVERIFY(action);
             QVERIFY(!action->isEnabled());
         }
-        const auto captures = qEnvironmentVariable("GIBBON_TEST_SCREENSHOTS");
+        const auto captures = qEnvironmentVariable("HEADSHOTFLOW_TEST_SCREENSHOTS");
         if (!captures.isEmpty()) {
             QDir().mkpath(captures);
             QTest::qWait(100);
@@ -1249,7 +1251,7 @@ class ControllerTests : public QObject {
         Controller c(images, nullptr, {}, false);
         c.setUiScale(100);
         qml.rootContext()->setContextProperty("backend", &c);
-        qml.load(QUrl::fromLocalFile(GIBBON_SOURCE_DIR "/qml/Main.qml"));
+        qml.load(QUrl::fromLocalFile(HEADSHOTFLOW_SOURCE_DIR "/qml/Main.qml"));
         QVERIFY(!qml.rootObjects().isEmpty());
         auto *window = qobject_cast<QQuickWindow *>(qml.rootObjects().front());
         QVERIFY(window);
@@ -1261,7 +1263,7 @@ class ControllerTests : public QObject {
         const auto *sample = window->findChild<QQuickItem *>("loadSample");
         QVERIFY(header && open && sample && folder);
         QVERIFY(!window->findChild<QQuickItem *>("emptyOpenPhotos"));
-        const auto captures = qEnvironmentVariable("GIBBON_TEST_SCREENSHOTS");
+        const auto captures = qEnvironmentVariable("HEADSHOTFLOW_TEST_SCREENSHOTS");
         const QList<QSize> sizes = {{1024, 720}, {1440, 900}};
         auto capture = [&](const QString &name, const QSize &size) {
             if (captures.isEmpty())
@@ -1361,7 +1363,7 @@ class ControllerTests : public QObject {
         Controller c(images, nullptr, {}, false);
         c.importDefaults.background = "off";
         qml.rootContext()->setContextProperty("backend", &c);
-        qml.load(QUrl::fromLocalFile(GIBBON_SOURCE_DIR "/qml/Main.qml"));
+        qml.load(QUrl::fromLocalFile(HEADSHOTFLOW_SOURCE_DIR "/qml/Main.qml"));
         QVERIFY(!qml.rootObjects().isEmpty());
         auto *window = qobject_cast<QQuickWindow *>(qml.rootObjects().front());
         QVERIFY(window);
@@ -1403,7 +1405,7 @@ class ControllerTests : public QObject {
         QCOMPARE(c.current(), 0);
         QVERIFY(QMetaObject::invokeMethod(confirmation, "reject"));
         QTRY_VERIFY(next->isEnabled());
-        const auto captures = qEnvironmentVariable("GIBBON_TEST_SCREENSHOTS");
+        const auto captures = qEnvironmentVariable("HEADSHOTFLOW_TEST_SCREENSHOTS");
         if (!captures.isEmpty()) {
             window->resize(1440, 900);
             QTest::qWait(100);
@@ -1520,10 +1522,10 @@ class ControllerTests : public QObject {
         const QDir cache(QStandardPaths::writableLocation(QStandardPaths::CacheLocation));
         QVERIFY(!cache.exists());
         QVERIFY(QDir().mkpath(cache.path()));
-        const auto legacy = cache.filePath("gibbon-sample.png");
-        const auto first = cache.filePath("gibbon-sample.jpg");
-        const auto second = cache.filePath("gibbon-sample-2.jpg");
-        const auto third = cache.filePath("gibbon-sample-3.jpg");
+        const auto legacy = cache.filePath("headshotflow-sample.png");
+        const auto first = cache.filePath("headshotflow-sample.jpg");
+        const auto second = cache.filePath("headshotflow-sample-2.jpg");
+        const auto third = cache.filePath("headshotflow-sample-3.jpg");
         const auto cleanup = qScopeGuard([&] {
             QFile::remove(legacy);
             QFile::remove(first);
@@ -1615,7 +1617,7 @@ class ControllerTests : public QObject {
         const QDir cache(QStandardPaths::writableLocation(QStandardPaths::CacheLocation));
         QVERIFY(!cache.exists());
         const auto cleanup = qScopeGuard([&] {
-            for (const auto *resource : gibbon::Engine::samplePortraitResources)
+            for (const auto *resource : headshotflow::Engine::samplePortraitResources)
                 QFile::remove(cache.filePath(QFileInfo(resource).fileName()));
             QDir().rmdir(cache.path());
         });

@@ -1,17 +1,17 @@
 # Maintainer: Devon Labs <https://devonlabs.space>
-pkgname=gibbonpfp-git
-pkgver=2.0.0
+pkgname=headshotflow-git
+pkgver=2.0.1
 pkgrel=1
 pkgdesc='HeadshotFlow offline headshot editor and batch image processor'
 arch=('x86_64')
-url='https://github.com/wispdevon/GibbonPfp'
+url='https://github.com/wispdevon/HeadshotFlow'
 license=('Apache-2.0')
 depends=('gcc-libs' 'glibc' 'qt6-base' 'qt6-declarative' 'opencv' 'onnxruntime' 'libarchive' 'libraw' 'libheif' 'libtiff' 'libwebp')
 makedepends=('git' 'cmake' 'ninja' 'pkgconf')
 checkdepends=('python')
-provides=('gibbonpfp')
-conflicts=('gibbonpfp')
-source=('GibbonPfp::git+https://github.com/wispdevon/GibbonPfp.git'
+provides=('headshotflow')
+conflicts=('headshotflow')
+source=('HeadshotFlow::git+https://github.com/wispdevon/HeadshotFlow.git'
         'face_detection_yunet_2023mar.onnx::https://media.githubusercontent.com/media/opencv/opencv_zoo/47534e27c9851bb1128ccc0102f1145e27f23f98/models/face_detection_yunet/face_detection_yunet_2023mar.onnx'
         'modnet-photographic.onnx::https://huggingface.co/Xenova/modnet/resolve/fa2fa546052fba4c08921230a26cc69a333fca12/onnx/model.onnx'
 )
@@ -21,28 +21,28 @@ sha256sums=('SKIP'
 )
 
 pkgver() {
-    cd "$srcdir/GibbonPfp"
+    cd "$srcdir/HeadshotFlow"
     local version
-    version=$(sed -n 's/project(GibbonPfp VERSION \([^ ]*\).*/\1/p' CMakeLists.txt)
+    version=$(sed -n 's/project(HeadshotFlow VERSION \([^ ]*\).*/\1/p' CMakeLists.txt)
     printf '%s.r%s.g%s' "$version" "$(git rev-list --count HEAD)" "$(git rev-parse --short HEAD)"
 }
 
 prepare() {
-    cp "$srcdir/face_detection_yunet_2023mar.onnx" "$srcdir/GibbonPfp/assets/models/"
-    cp "$srcdir/modnet-photographic.onnx" "$srcdir/GibbonPfp/assets/models/"
+    cp "$srcdir/face_detection_yunet_2023mar.onnx" "$srcdir/HeadshotFlow/assets/models/"
+    cp "$srcdir/modnet-photographic.onnx" "$srcdir/HeadshotFlow/assets/models/"
 }
 
 build() {
-    cmake -S "$srcdir/GibbonPfp" -B "$srcdir/build" -G Ninja \
+    cmake -S "$srcdir/HeadshotFlow" -B "$srcdir/build" -G Ninja \
         -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr \
-        -DGIBBON_SYSTEM_INSTALL=ON -DGIBBON_BUNDLED_ORT=OFF -DBUILD_TESTING=ON \
-        -DGIBBON_BUILD_VERSION="$pkgver"
+        -DHEADSHOTFLOW_SYSTEM_INSTALL=ON -DHEADSHOTFLOW_BUNDLED_ORT=OFF -DBUILD_TESTING=ON \
+        -DHEADSHOTFLOW_BUILD_VERSION="$pkgver"
     cmake --build "$srcdir/build"
 }
 
 check() {
     ctest --test-dir "$srcdir/build" --output-on-failure
-    python "$srcdir/GibbonPfp/scripts/test_cli.py" "$srcdir/build/gibbonpfp"
+    python "$srcdir/HeadshotFlow/scripts/test_cli.py" "$srcdir/build/headshotflow"
 }
 
 package() {

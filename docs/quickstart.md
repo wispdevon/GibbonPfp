@@ -1,10 +1,10 @@
 # HeadshotFlow quickstart
 
-Install HeadshotFlow from [Releases](https://github.com/wispdevon/GibbonPfp/releases)
+Install HeadshotFlow from [Releases](https://github.com/wispdevon/HeadshotFlow/releases)
 or follow the [build instructions](BUILDING.md). The desktop launcher is named
-**HeadshotFlow**. The terminal command is `gibbonpfp`.
+**HeadshotFlow**. The terminal command is `headshotflow`.
 On Linux, a per-user test install can also be launched with
-`~/.local/bin/gibbonpfp`. Close any running copy before launching a newly
+`~/.local/bin/headshotflow`. Close any running copy before launching a newly
 installed build.
 
 ## Export the sample batch

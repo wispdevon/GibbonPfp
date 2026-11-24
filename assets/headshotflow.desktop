@@ -2,8 +2,8 @@
 Type=Application
 Name=HeadshotFlow
 Comment=Offline portrait preparation and batch resizing
-Exec=gibbonpfp %F
-Icon=gibbonpfp
+Exec=headshotflow %F
+Icon=headshotflow
 Terminal=false
 Categories=Graphics;Photography;Qt;
 MimeType=image/jpeg;image/png;image/webp;image/tiff;image/heic;

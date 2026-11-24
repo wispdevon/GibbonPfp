@@ -66,7 +66,7 @@ class Controller : public QObject {
         return index;
     }
     QString processingDevice() const { return devicePreference; }
-    bool cpuOverride() const { return qEnvironmentVariable("GIBBON_INFERENCE_DEVICE") == "cpu"; }
+    bool cpuOverride() const { return qEnvironmentVariable("HEADSHOTFLOW_INFERENCE_DEVICE") == "cpu"; }
     QString inferenceDetails() const { return engine.inferenceDetails(); }
     void setProcessingDevice(const QString &value);
     Q_INVOKABLE void releaseModels();
@@ -151,8 +151,8 @@ class Controller : public QObject {
         QString path, state = "Imported", error;
         QString fingerprint;
         bool selected = true;
-        gibbon::Settings settings;
-        QVector<gibbon::Settings> history;
+        headshotflow::Settings settings;
+        QVector<headshotflow::Settings> history;
         QStringList warnings;
     };
     QString recoveryPath, recoveryNotice, recoveryError;
@@ -175,11 +175,11 @@ class Controller : public QObject {
     int progressPhoto = 0, progressTotal = 0;
     void beginProgress();
     void endProgress();
-    gibbon::ProgressCallback progressCallback(quint64 token, int photo, int total);
-    void acceptProgress(quint64 token, int photo, int total, const gibbon::Progress &progress);
+    headshotflow::ProgressCallback progressCallback(quint64 token, int photo, int total);
+    void acceptProgress(quint64 token, int photo, int total, const headshotflow::Progress &progress);
     friend class ControllerTests;
     QVector<Item> queue;
-    gibbon::Settings importDefaults;
+    headshotflow::Settings importDefaults;
     QVariantMap exportHistory;
     bool presetOutputPending = false;
     int index = -1, generation = 0;
@@ -192,7 +192,7 @@ class Controller : public QObject {
     ImageStore *images;
     QThreadPool pool;
     std::atomic_bool cancelled{false};
-    gibbon::Engine engine;
+    headshotflow::Engine engine;
     std::function<void()> pendingQualityAction;
     bool qualityConsent = false;
     bool allowHighQuality(bool needed, std::function<void()> resume);
@@ -201,7 +201,7 @@ class Controller : public QObject {
     bool checkSaveDestination(const QString &destination);
     bool startExportRequest(const QVariantMap &options, const QUrl &destination,
                             bool replaceArchive, bool createFolder);
-    void showResult(const gibbon::Result &r, int row);
+    void showResult(const headshotflow::Result &r, int row);
     bool seedSampleThumbnails();
     void processMany(QVector<int> rows, const QVariantMap &exportRequest = {}, bool replaceArchive = false,
                      bool createFolder = false);

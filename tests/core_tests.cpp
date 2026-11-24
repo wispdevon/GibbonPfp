@@ -13,7 +13,7 @@
 #include <tiffio.h>
 #include <webp/encode.h>
 
-using namespace gibbon;
+using namespace headshotflow;
 class CoreTests : public QObject {
     Q_OBJECT
   private slots:
@@ -165,16 +165,16 @@ class CoreTests : public QObject {
         const auto mask = automatic.mask(rgb, "fast");
         QCOMPARE(mask.size(), rgb.size());
         QVERIFY(cv::checkRange(mask, true, nullptr, 0., 1.00001));
-        if (qEnvironmentVariableIsSet("GIBBON_EXPECT_CUDA"))
+        if (qEnvironmentVariableIsSet("HEADSHOTFLOW_EXPECT_CUDA"))
             QVERIFY2(automatic.inferenceStatus().contains("NVIDIA GPU"),
                      qPrintable(automatic.inferenceStatus()));
-        const auto prior = qgetenv("GIBBON_INFERENCE_DEVICE");
-        const bool existed = qEnvironmentVariableIsSet("GIBBON_INFERENCE_DEVICE");
+        const auto prior = qgetenv("HEADSHOTFLOW_INFERENCE_DEVICE");
+        const bool existed = qEnvironmentVariableIsSet("HEADSHOTFLOW_INFERENCE_DEVICE");
         const auto restore = qScopeGuard([&] {
-            if (existed) qputenv("GIBBON_INFERENCE_DEVICE", prior);
-            else qunsetenv("GIBBON_INFERENCE_DEVICE");
+            if (existed) qputenv("HEADSHOTFLOW_INFERENCE_DEVICE", prior);
+            else qunsetenv("HEADSHOTFLOW_INFERENCE_DEVICE");
         });
-        qputenv("GIBBON_INFERENCE_DEVICE", "cpu");
+        qputenv("HEADSHOTFLOW_INFERENCE_DEVICE", "cpu");
         Models cpu;
         const auto cpuMask = cpu.mask(rgb, "fast");
         QCOMPARE(cpu.inferenceStatus(), QString("Fast: CPU (launch override)"));
@@ -190,7 +190,7 @@ class CoreTests : public QObject {
         preference.mask(rgb, "fast"); // launch override still wins
         QCOMPARE(preference.inferenceStatus(), QString("Fast: CPU (launch override)"));
         QVERIFY(cv::norm(mask, cpuMask, cv::NORM_INF) < .02);
-        qunsetenv("GIBBON_INFERENCE_DEVICE");
+        qunsetenv("HEADSHOTFLOW_INFERENCE_DEVICE");
         preference.setPreference("cpu");
         preference.mask(rgb, "fast");
         QCOMPARE(preference.inferenceStatus(), QString("Fast: CPU (selected in Models)"));

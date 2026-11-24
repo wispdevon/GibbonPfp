@@ -49,7 +49,7 @@ class ExportTests : public QObject {
         QSettings::setDefaultFormat(QSettings::IniFormat);
         QSettings::setPath(QSettings::IniFormat, QSettings::UserScope, config.path());
         QQuickStyle::setStyle("Fusion");
-        loadWorkspaceFonts(GIBBON_SOURCE_DIR "/assets/fonts");
+        loadWorkspaceFonts(HEADSHOTFLOW_SOURCE_DIR "/assets/fonts");
     }
     void init() { QSettings().clear(); }
 
@@ -132,7 +132,7 @@ class ExportTests : public QObject {
         addPhoto(resumed, dir.filePath("second.png"));
         QCOMPARE(resumed.exportOptions(true).value("style").toMap(), style);
 
-        auto preset = gibbon::Settings{};
+        auto preset = headshotflow::Settings{};
         preset.background = "off";
         preset.automatic = true;
         preset.format = "png";
@@ -292,7 +292,7 @@ class ExportTests : public QObject {
         QQmlApplicationEngine qml;
         qml.rootContext()->setContextProperty("backend", &c);
         qml.addImageProvider("photos", store);
-        qml.load(QUrl::fromLocalFile(GIBBON_SOURCE_DIR "/qml/Main.qml"));
+        qml.load(QUrl::fromLocalFile(HEADSHOTFLOW_SOURCE_DIR "/qml/Main.qml"));
         QCOMPARE(qml.rootObjects().size(), 1);
         auto *window = qobject_cast<QQuickWindow *>(qml.rootObjects().first());
         QVERIFY(window);
@@ -346,7 +346,7 @@ class ExportTests : public QObject {
         auto *chooseLabel = choose->property("contentItem").value<QObject *>();
         QVERIFY(chooseLabel);
         QCOMPARE(chooseLabel->property("color").value<QColor>(), QColor(Qt::white));
-        const auto capture = qEnvironmentVariable("GIBBON_TEST_SCREENSHOTS");
+        const auto capture = qEnvironmentVariable("HEADSHOTFLOW_TEST_SCREENSHOTS");
         if (!capture.isEmpty()) {
             QDir().mkpath(capture);
             QTest::qWait(100);

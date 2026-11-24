@@ -7,7 +7,7 @@
 #include <memory>
 #include <stdexcept>
 
-namespace gibbon {
+namespace headshotflow {
 void ZipExport::checkCancelled() const {
     if (cancel && cancel->load())
         throw std::runtime_error("ZIP export cancelled; destination unchanged");
@@ -114,4 +114,4 @@ void ZipExport::commit(const QByteArray &report) {
     if (!file.commit())
         throw std::runtime_error(file.errorString().toStdString());
 }
-} // namespace gibbon
+} // namespace headshotflow

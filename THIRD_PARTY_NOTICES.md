@@ -1,6 +1,6 @@
 # Third-party software and assets
 
-GibbonPfp application code is Apache-2.0. Dependencies and model weights retain
+HeadshotFlow application code is Apache-2.0. Dependencies and model weights retain
 their own licenses. Distribution must retain the corresponding notices and
 provide the source/relinking materials required by the selected licenses.
 
@@ -22,7 +22,7 @@ provide the source/relinking materials required by the selected licenses.
 
 Model checksums and exact download URLs are in `assets/models/manifest.json`.
 BiRefNet is distributed through the rembg release assets and installed only on
-request. GibbonPfp does not embed Python, PyTorch, rembg, or cloud inference.
+request. HeadshotFlow does not embed Python, PyTorch, rembg, or cloud inference.
 Fast model notices and font license texts are included in the source tree.
 
 Release builds use shared dependencies. The vcpkg baseline fixes dependency

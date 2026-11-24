@@ -1,5 +1,6 @@
 #include "controller.h"
 #include "fonts.h"
+#include "legacy_storage.h"
 #include <QCommandLineParser>
 #include <QDir>
 #include <QFile>
@@ -11,14 +12,25 @@
 #include <QQuickStyle>
 #include <QQuickWindow>
 #include <QSaveFile>
+#include <QSettings>
 #include <QTextStream>
 #include <QTimer>
 #include <csignal>
 
-using namespace gibbon;
+using namespace headshotflow;
 static std::atomic_bool interrupted{false};
 static void interrupt(int) {
     interrupted = true;
+}
+static void migratePreferences() {
+    QSettings current;
+    if (current.value("preferencesMigrated").toBool())
+        return;
+    const QSettings previous(QCoreApplication::organizationName(), legacyAppName);
+    for (const auto &key : previous.allKeys())
+        if (!current.contains(key))
+            current.setValue(key, previous.value(key));
+    current.setValue("preferencesMigrated", true);
 }
 static QJsonObject readSettings(const QString &path) {
     QFile f(path);
@@ -66,6 +78,12 @@ static void writeReport(const QString &path, const QJsonArray &report) {
         throw std::runtime_error("Cannot write report");
 }
 int main(int argc, char **argv) {
+    for (const auto *suffix : {"MODEL_DIR", "INFERENCE_DEVICE", "DISABLE_SOURCE_MODELS"}) {
+        const auto current = QByteArray("HEADSHOTFLOW_") + suffix;
+        const auto previous = QByteArray("GIBBON_") + suffix;
+        if (!qEnvironmentVariableIsSet(current.constData()) && qEnvironmentVariableIsSet(previous.constData()))
+            qputenv(current.constData(), qgetenv(previous.constData()));
+    }
     bool cli = argc > 1 && (QString::fromLocal8Bit(argv[1]) == "process" ||
                             QString::fromLocal8Bit(argv[1]) == "models" ||
                             QString::fromLocal8Bit(argv[1]) == "-h" ||
@@ -90,12 +108,13 @@ int main(int argc, char **argv) {
     else
         application = std::make_unique<QGuiApplication>(argc, argv);
     auto &app = *application;
-    // Keep the storage identity stable for existing preferences and recovery files.
-    app.setApplicationName("GibbonPfp");
-    if (!cli)
+    app.setApplicationName("HeadshotFlow");
+    if (!cli) {
         QGuiApplication::setApplicationDisplayName("HeadshotFlow");
+        QGuiApplication::setDesktopFileName("headshotflow");
+    }
     app.setOrganizationName("Devon Labs");
-    app.setApplicationVersion(QString::fromUtf8(GIBBON_BUILD_VERSION));
+    app.setApplicationVersion(QString::fromUtf8(HEADSHOTFLOW_BUILD_VERSION));
     QCommandLineParser p;
     p.setApplicationDescription("HeadshotFlow · Offline headshot preparation · Qt desktop and batch CLI");
     p.addHelpOption();
@@ -129,6 +148,8 @@ int main(int argc, char **argv) {
                   {"smoke-test", "Open desktop and exit after startup"},
                   {"screenshot", "Save desktop capture after preview is ready", "file"}});
     p.process(app);
+    if (!cli && !p.isSet("smoke-test") && !p.isSet("screenshot"))
+        migratePreferences();
     auto args = p.positionalArguments();
     try {
         if (!args.empty() && args.front() == "models") {
@@ -141,12 +162,12 @@ int main(int argc, char **argv) {
                 QTextStream(stdout) << Models::install(args[2], &interrupted) << Qt::endl;
                 return 0;
             }
-            throw std::runtime_error("Usage: gibbonpfp models [list | install face|fast|quality]");
+            throw std::runtime_error("Usage: headshotflow models [list | install face|fast|quality]");
         }
         if (!args.empty() && args.front() == "process") {
             args.removeFirst();
             if (args.empty() || !p.isSet("output"))
-                throw std::runtime_error("Usage: gibbonpfp process INPUT... --output DIRECTORY");
+                throw std::runtime_error("Usage: headshotflow process INPUT... --output DIRECTORY");
             auto s = p.isSet("preset") ? Settings::fromJson(readSettings(p.value("preset")))
                                        : Settings{};
             if (p.isSet("uncapped")) {
@@ -249,14 +270,14 @@ int main(int argc, char **argv) {
             return interrupted ? 130 : (held || failed ? 2 : 0);
         }
         loadWorkspaceFonts();
-        QGuiApplication::setWindowIcon(QIcon(":/assets/gibbonpfp.png"));
+        QGuiApplication::setWindowIcon(QIcon(":/assets/headshotflow.png"));
         QQuickStyle::setStyle("Fusion");
         QQmlApplicationEngine qml;
         auto *store = new ImageStore;
         qml.addImageProvider("photos", store);
         Controller controller(store, nullptr, {}, !p.isSet("smoke-test") && !p.isSet("screenshot"));
         qml.rootContext()->setContextProperty("backend", &controller);
-        qml.loadFromModule("Gibbon", "Main");
+        qml.loadFromModule("HeadshotFlow", "Main");
         if (qml.rootObjects().isEmpty())
             return 1;
         if (!args.empty()) {

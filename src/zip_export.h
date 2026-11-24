@@ -5,7 +5,7 @@
 #include <QString>
 #include <atomic>
 struct archive;
-namespace gibbon {
+namespace headshotflow {
 // Streaming, atomic archive: destruction without commit leaves the destination intact.
 class ZipExport {
   public:
@@ -26,4 +26,4 @@ class ZipExport {
     void check(int result);
     void checkCancelled() const;
 };
-} // namespace gibbon
+} // namespace headshotflow

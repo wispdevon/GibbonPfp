@@ -9,7 +9,7 @@ fi
 : "${APPLE_CERTIFICATE_PASSWORD:?Missing certificate password}"
 : "${APPLE_SIGNING_IDENTITY:?Missing signing identity}"
 signing_dir=$(mktemp -d)
-signing_keychain="$signing_dir/gibbon.keychain-db"
+signing_keychain="$signing_dir/headshotflow.keychain-db"
 signing_password=$(openssl rand -hex 24)
 trap 'security delete-keychain "$signing_keychain" >/dev/null 2>&1 || true; rm -rf "$signing_dir"' EXIT
 printf '%s' "$APPLE_CERTIFICATE_BASE64" | base64 --decode > "$signing_dir/certificate.p12"

@@ -6,7 +6,7 @@
 #include <vector>
 #include <opencv2/core.hpp>
 
-namespace gibbon {
+namespace headshotflow {
 // Owned values only: clone matrices at both boundaries. Used on the engine worker.
 class ProcessingCache {
   public:

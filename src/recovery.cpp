@@ -1,4 +1,5 @@
 #include "controller.h"
+#include "legacy_storage.h"
 #include <QCoreApplication>
 #include <QCryptographicHash>
 #include <QDir>
@@ -7,7 +8,7 @@
 #include <QSaveFile>
 #include <QStandardPaths>
 
-using namespace gibbon;
+using namespace headshotflow;
 QString Controller::sourceFingerprint(const QString &path) {
     QFile file(path);
     if (!file.open(QIODevice::ReadOnly)) return {};
@@ -20,7 +21,8 @@ QJsonObject Controller::validateRecovery(const QByteArray &bytes) {
     const auto document = QJsonDocument::fromJson(bytes, &error);
     const auto object = document.object();
     if (error.error != QJsonParseError::NoError || !document.isObject() ||
-        object["version"].toInt() != 1 || object["kind"] != "gibbon-recovery" ||
+        object["version"].toInt() != 1 ||
+        (object["kind"] != "headshotflow-recovery" && object["kind"] != "gibbon-recovery") ||
         !object["photos"].isArray() || !object["active"].isDouble())
         throw std::runtime_error("Invalid recovery snapshot");
     if (object.contains("importDefaults")) {
@@ -45,7 +47,7 @@ QJsonObject Controller::recoveryJson() const {
     for (const auto &q : queue)
         photos.append(QJsonObject{{"source", q.path}, {"fingerprint", q.fingerprint},
                                   {"settings", q.settings.json()}, {"selected", q.selected}});
-    return {{"version", 1}, {"kind", "gibbon-recovery"}, {"active", index}, {"photos", photos}, {"importDefaults", importDefaults.json()}};
+    return {{"version", 1}, {"kind", "headshotflow-recovery"}, {"active", index}, {"photos", photos}, {"importDefaults", importDefaults.json()}};
 }
 void Controller::initializeRecovery(const QString &directory) {
     // Ordinary unit tests must not read/write the user's recovery workspace.
@@ -53,6 +55,11 @@ void Controller::initializeRecovery(const QString &directory) {
     recoveryPath = directory.isEmpty()
         ? QStandardPaths::writableLocation(QStandardPaths::AppLocalDataLocation) + "/recovery"
         : directory;
+    if (directory.isEmpty() && !QFileInfo::exists(recoveryPath)) {
+        const auto legacy = legacyLocation(QStandardPaths::AppLocalDataLocation);
+        if (!legacy.isEmpty() && QFileInfo(legacy + "/recovery").isDir())
+            recoveryPath = legacy + "/recovery";
+    }
     if (!QDir().mkpath(recoveryPath)) {
         recoveryError = "Autosave unavailable: cannot create recovery directory. Save a session manually.";
         return;

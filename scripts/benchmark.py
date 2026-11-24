@@ -13,9 +13,9 @@ ROOT = Path(__file__).resolve().parents[1]
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--engine', type=Path, default=ROOT / 'build-local/gibbon_benchmark')
-    parser.add_argument('--photos', type=Path, default=Path.home() / '.cache/gibbon-benchmarks')
-    parser.add_argument('--output', type=Path, default=Path.home() / '.cache/gibbon-benchmarks/reports/fast')
+    parser.add_argument('--engine', type=Path, default=ROOT / 'build-local/headshotflow_benchmark')
+    parser.add_argument('--photos', type=Path, default=Path.home() / '.cache/headshotflow-benchmarks')
+    parser.add_argument('--output', type=Path, default=Path.home() / '.cache/headshotflow-benchmarks/reports/fast')
     parser.add_argument('--download', action='store_true', help='Download missing/corrupt public fixtures')
     parser.add_argument('--quality', action='store_true', help='Explicitly load the large High Quality model')
     parser.add_argument('--if-cached', action='store_true', help='Skip if public fixtures have not been downloaded')

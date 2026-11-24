@@ -11,7 +11,7 @@
 #ifdef Q_OS_UNIX
 #include <sys/resource.h>
 #endif
-using namespace gibbon;
+using namespace headshotflow;
 static void writeJson(const QString &path, const QJsonObject &value) {
     QSaveFile file(path);
     const auto bytes = QJsonDocument(value).toJson();
@@ -46,12 +46,12 @@ static QJsonObject memory() {
 }
 int main(int argc, char **argv) {
     QGuiApplication app(argc, argv);
-    app.setApplicationName("GibbonPfp");
+    app.setApplicationName("HeadshotFlow");
     app.setOrganizationName("Devon Labs");
     try {
         const auto args = app.arguments();
         if (args.size() < 4 || args.size() > 5 || (args.size() == 5 && args[4] != "--quality"))
-            throw std::runtime_error("Usage: gibbon_benchmark manifest.json photos-directory output-directory [--quality]");
+            throw std::runtime_error("Usage: headshotflow_benchmark manifest.json photos-directory output-directory [--quality]");
         QFile manifest(args[1]);
         if (!manifest.open(QIODevice::ReadOnly)) throw std::runtime_error("Cannot open manifest");
         auto specification = QJsonDocument::fromJson(manifest.readAll()).object();
@@ -124,7 +124,7 @@ int main(int argc, char **argv) {
         }
         painter.end();
         if (!sheet.save(output.filePath("contact-sheet.png"))) throw std::runtime_error("Cannot save contact sheet");
-        writeJson(output.filePath("report.json"), {{"version", 1}, {"build", GIBBON_BENCH_VERSION},
+        writeJson(output.filePath("report.json"), {{"version", 1}, {"build", HEADSHOTFLOW_BENCH_VERSION},
             {"platform", QSysInfo::prettyProductName()}, {"cpuArchitecture", QSysInfo::currentCpuArchitecture()},
             {"mode", mode}, {"settings", settings.json()}, {"removalContextZoom", 55},
             {"modelManifest", Models::manifest()}, {"portraits", reports},

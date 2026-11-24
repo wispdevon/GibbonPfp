@@ -1,4 +1,4 @@
 #!/bin/sh
 set -eu
 app_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
-exec "$app_dir/usr/bin/gibbonpfp" "$@"
+exec "$app_dir/usr/bin/headshotflow" "$@"

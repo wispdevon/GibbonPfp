@@ -108,7 +108,7 @@ confirmation is separate from per-photo framing approval and is not persisted.
 
 Prefer NVIDIA CUDA when the runtime supports it, retaining CPU fallback. Show
 actual session device status in Models. Keep device selection separate from
-photo settings; `GIBBON_INFERENCE_DEVICE=cpu` forces CPU until app exit.
+photo settings; `HEADSHOTFLOW_INFERENCE_DEVICE=cpu` forces CPU until app exit.
 
 Models offers Automatic / CPU with a persistent local preference. A CPU launch
 override has priority and is explained in place. Show per-model devices and readable

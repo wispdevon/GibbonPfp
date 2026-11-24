@@ -77,7 +77,7 @@ jobs:
           python scripts/fetch_assets.py
       - name: Configure
         shell: bash
-        run: cmake --preset vcpkg -DGIBBON_BUNDLED_ORT=ON -DVCPKG_TARGET_TRIPLET=${{ matrix.triplet }} -DVCPKG_OVERLAY_TRIPLETS="$PWD/cmake/triplets"
+        run: cmake --preset vcpkg -DHEADSHOTFLOW_BUNDLED_ORT=ON -DVCPKG_TARGET_TRIPLET=${{ matrix.triplet }} -DVCPKG_OVERLAY_TRIPLETS="$PWD/cmake/triplets"
       - name: Save compiled dependencies
         if: ${{ !cancelled() && steps.dependency-cache.outputs.cache-primary-key != '' && steps.dependency-cache.outputs.cache-hit != 'true' }}
         uses: actions/cache/save@v4
@@ -90,7 +90,7 @@ jobs:
         shell: bash
         run: |
           ctest --test-dir build-release --output-on-failure --output-junit test-results.xml
-          if [[ "$RUNNER_OS" == "macOS" ]]; then exe=build-release/gibbonpfp.app/Contents/MacOS/gibbonpfp; elif [[ "$RUNNER_OS" == "Windows" ]]; then exe=build-release/gibbonpfp.exe; else exe=build-release/gibbonpfp; fi
+          if [[ "$RUNNER_OS" == "macOS" ]]; then exe=build-release/headshotflow.app/Contents/MacOS/headshotflow; elif [[ "$RUNNER_OS" == "Windows" ]]; then exe=build-release/headshotflow.exe; else exe=build-release/headshotflow; fi
           python scripts/test_cli.py "$exe"
           "$exe" --smoke-test
       - name: Upload test diagnostics
@@ -109,7 +109,7 @@ jobs:
         env:
           WINDOWS_CERTIFICATE_BASE64: ${{ secrets.WINDOWS_CERTIFICATE_BASE64 }}
           WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
-        run: scripts/sign_windows.ps1 -Executable build-release/gibbonpfp.exe
+        run: scripts/sign_windows.ps1 -Executable build-release/headshotflow.exe
       - name: Install portable distribution
         shell: bash
         run: |
@@ -138,8 +138,8 @@ jobs:
           APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
-          bash scripts/sign_macos.sh dist/portable/gibbonpfp.app
-          python scripts/test_packaged.py dist/portable gibbonpfp.app/Contents/MacOS/gibbonpfp
+          bash scripts/sign_macos.sh dist/portable/headshotflow.app
+          python scripts/test_packaged.py dist/portable headshotflow.app/Contents/MacOS/headshotflow
           version=$(sed -n 's/^CMAKE_PROJECT_VERSION:STATIC=//p' build-release/CMakeCache.txt)
           : "${version:?Missing project version in CMake cache}"
           dmg="dist/HeadshotFlow-$version-${{ matrix.name }}.dmg"
@@ -155,9 +155,9 @@ jobs:
         if: runner.os != 'macOS'
         shell: bash
         env:
-          GIBBON_DISABLE_SOURCE_MODELS: '1'
+          HEADSHOTFLOW_DISABLE_SOURCE_MODELS: '1'
         run: |
-          if [[ "$RUNNER_OS" == "Windows" ]]; then exe=bin/gibbonpfp.exe; else exe=bin/gibbonpfp; fi
+          if [[ "$RUNNER_OS" == "Windows" ]]; then exe=bin/headshotflow.exe; else exe=bin/headshotflow; fi
           python scripts/test_packaged.py dist/portable "$exe"
       - uses: actions/upload-artifact@v4
         with:

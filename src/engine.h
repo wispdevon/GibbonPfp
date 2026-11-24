@@ -5,7 +5,7 @@
 #include <array>
 #include <atomic>
 
-namespace gibbon {
+namespace headshotflow {
 struct Result {
     QImage source, preview, mask;
     QByteArray encoded;
@@ -40,7 +40,7 @@ class Engine {
     static cv::Mat sharpenForScreen(const cv::Mat &rgb, const cv::Mat &alpha, const QString &level,
                                     std::atomic_bool *cancel = nullptr);
     static constexpr std::array samplePortraitResources{
-        ":/assets/gibbon-sample.jpg", ":/assets/gibbon-sample-2.jpg", ":/assets/gibbon-sample-3.jpg"};
+        ":/assets/headshotflow-sample.jpg", ":/assets/headshotflow-sample-2.jpg", ":/assets/headshotflow-sample-3.jpg"};
     static QImage decode(const QString &path, const Settings &settings);
     static QSize outputSize(QSize crop, const Settings &settings);
     static double tone(double lightness, double amount);
@@ -51,4 +51,4 @@ class Engine {
   private:
     Models models;
 };
-} // namespace gibbon
+} // namespace headshotflow

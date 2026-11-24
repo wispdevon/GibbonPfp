@@ -1,23 +1,23 @@
 <a id="readme-top"></a>
 
 <div align="center">
-  <img src="assets/gibbonpfp.png" alt="HeadshotFlow icon" width="88" height="88">
+  <img src="assets/headshotflow.png" alt="HeadshotFlow icon" width="88" height="88">
   <h1>HeadshotFlow</h1>
   <p>Frame, refine, and export consistent portraits. All on your device.</p>
   <p>
-    <a href="https://github.com/wispdevon/GibbonPfp/releases">Releases</a> ·
+    <a href="https://github.com/wispdevon/HeadshotFlow/releases">Releases</a> ·
     <a href="docs/quickstart.md">Quickstart</a> ·
     <a href="docs/BUILDING.md">Build instructions</a> ·
-    <a href="https://github.com/wispdevon/GibbonPfp/issues">Report a bug / Request a feature</a>
+    <a href="https://github.com/wispdevon/HeadshotFlow/issues">Report a bug / Request a feature</a>
   </p>
 </div>
 
-[![Build and package](https://github.com/wispdevon/GibbonPfp/actions/workflows/build.yml/badge.svg)](https://github.com/wispdevon/GibbonPfp/actions/workflows/build.yml)
+[![Build and package](https://github.com/wispdevon/HeadshotFlow/actions/workflows/build.yml/badge.svg)](https://github.com/wispdevon/HeadshotFlow/actions/workflows/build.yml)
 [![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
 
-The app is now **HeadshotFlow**. The `gibbonpfp` command, package ID, and
-settings/recovery locations remain compatible with existing installations.
-The source repository remains at `wispdevon/GibbonPfp`.
+The desktop app, terminal command, and packages use the **HeadshotFlow** name.
+Existing preferences, saved sessions, recovery workspaces, and model downloads
+are available after upgrading.
 
 ## About the project
 
@@ -76,20 +76,20 @@ The default output is **up to 768 × 1024 pixels, portrait 3:4**, with **70% cro
 ### Built with
 
 C++20 · Qt 6 Quick/QML · OpenCV · ONNX Runtime · LibRaw · libheif/libde265 ·
-libarchive · libtiff · libwebp · CMake/Ninja. GUI and CLI share the same `gibbon_core` engine.
+libarchive · libtiff · libwebp · CMake/Ninja. GUI and CLI share the same `headshotflow_core` engine.
 
 ## Getting started
 
 ### Installation
 
-Check [Releases](https://github.com/wispdevon/GibbonPfp/releases) for published
+Check [Releases](https://github.com/wispdevon/HeadshotFlow/releases) for published
 packages. If a package is unavailable for your system, build from source below.
 Release targets are Windows 11 x64, Ubuntu 24.04+ x64, and macOS 14+ on
 Apple Silicon. Portable packages are configured to include runtime dependencies,
 face detection, and the Fast model. High Quality is a separate download.
 
 These are packaging targets, not a claim that every revision has been validated
-on every platform. See [build results](https://github.com/wispdevon/GibbonPfp/actions)
+on every platform. See [build results](https://github.com/wispdevon/HeadshotFlow/actions)
 and [distribution notes](docs/BUILDING.md) for the actual build and signing status.
 
 ### Build from source
@@ -98,17 +98,17 @@ Install Qt 6.8+, a C++20 compiler, CMake, Ninja, Python 3.10+, and the native
 libraries listed in [Building and distribution](docs/BUILDING.md). Then:
 
 ```bash
-git clone https://github.com/wispdevon/GibbonPfp.git
-cd GibbonPfp
+git clone https://github.com/wispdevon/HeadshotFlow.git
+cd HeadshotFlow
 python3 scripts/fetch_assets.py
 cmake --preset dev
 cmake --build --preset dev
 ctest --preset dev
-./build/gibbonpfp
+./build/headshotflow
 ```
 
-On Windows, run `build/gibbonpfp.exe`. On macOS, run
-`build/gibbonpfp.app/Contents/MacOS/gibbonpfp`. The installed app does not need a
+On Windows, run `build/headshotflow.exe`. On macOS, run
+`build/headshotflow.app/Contents/MacOS/headshotflow`. The installed app does not need a
 Python interpreter; Python is used by development scripts.
 
 ### Arch Linux and local updates
@@ -122,9 +122,9 @@ scripts/package-arch-local.sh
 ```
 
 The user install lives under `~/.local` and includes a desktop launcher. Reopen
-HeadshotFlow after an update; `~/.local/bin/gibbonpfp --version` reports its build ID.
+HeadshotFlow after an update; `~/.local/bin/headshotflow --version` reports its build ID.
 The Arch package uses system libraries and requires administrator authentication
-to install. An AUR-ready `gibbonpfp-git` recipe is in [packaging/aur](packaging/aur);
+to install. An AUR-ready `headshotflow-git` recipe is in [packaging/aur](packaging/aur);
 adding it to this repository does not automatically publish it to AUR.
 See [Arch packaging](docs/BUILDING.md#arch-linux--aur-and-local-updates).
 
@@ -253,7 +253,7 @@ Space Grotesk Bold for headings, and Geist Mono for dimensions and zoom readouts
 Fonts are embedded and checked at startup. UI scaling includes controls, spacing,
 panels, and app popups, on top of Qt display scaling. File dialogs use their own
 typography and scaling. On Linux, HeadshotFlow defaults to Qt's built-in dialogs.
-On systems with a working portal theme, launch `gibbonpfp -platformtheme xdgdesktopportal`
+On systems with a working portal theme, launch `headshotflow -platformtheme xdgdesktopportal`
 to use the system's configured file chooser. Export dimensions do not change.
 
 The queue and inspector buttons toggle sidebars. Narrow workspaces show one at a
@@ -340,7 +340,7 @@ See [ONNX Runtime CUDA requirements](https://onnxruntime.ai/docs/execution-provi
 To force CPU use for troubleshooting or to reserve VRAM, launch:
 
 ```bash
-GIBBON_INFERENCE_DEVICE=cpu gibbonpfp
+HEADSHOTFLOW_INFERENCE_DEVICE=cpu headshotflow
 ```
 
 Fast now uses [MODNet](https://github.com/ZHKKKe/MODNet), a portrait-matting network,
@@ -370,7 +370,7 @@ mask. There is no measured High Quality speedup from a 2 MP input cap in this ap
 
 **Models → Processing device** offers Automatic (default) and CPU. This local
 preference persists separately from photo settings, presets, and sessions. The
-`GIBBON_INFERENCE_DEVICE=cpu` launch override takes priority and is shown in Models.
+`HEADSHOTFLOW_INFERENCE_DEVICE=cpu` launch override takes priority and is shown in Models.
 Automatic tries NVIDIA CUDA only when the installed runtime exposes its provider.
 Published packages bundle CPU-only inference; this engine does not enable AMD/Intel
 GPU providers or Apple GPU acceleration. CUDA initialization or inference can fail
@@ -397,46 +397,46 @@ download completes, select **High Quality · portrait** under Background removal
 Or use the CLI:
 
 ```bash
-gibbonpfp models list
-gibbonpfp models install quality
-gibbonpfp process portrait.jpg --output profiles/ --background quality --format png
+headshotflow models list
+headshotflow models install quality
+headshotflow process portrait.jpg --output profiles/ --background quality --format png
 ```
 
 Installation downloads over HTTPS and verifies the pinned SHA-256 before accepting
 the file. Subsequent inference is offline. Missing or corrupted weights produce
 a repair instruction. Models are stored in Qt's application-local data directory
-under `models/`; `GIBBON_MODEL_DIR` adds a model lookup directory. The CLI installation
+under `models/`; `HEADSHOTFLOW_MODEL_DIR` adds a model lookup directory. The CLI installation
 command prints the installed path. High Quality is excluded from default packages.
 
 ## CLI usage
 
 ```bash
 # Prepare a batch; uncertain photos are held and recorded in the report.
-gibbonpfp process photos/ --output profiles/ --report report.json
+headshotflow process photos/ --output profiles/ --report report.json
 
 # Explicit automatic policy: largest face, or a center crop when no face is found.
-gibbonpfp process photos/ --output profiles/ --fully-automatic --recursive
+headshotflow process photos/ --output profiles/ --fully-automatic --recursive
 
 # Fast removal and transparent PNG output.
-gibbonpfp process portrait.jpg --output profiles/ --background fast --format png
+headshotflow process portrait.jpg --output profiles/ --background fast --format png
 
 # Source crop resolution or custom 3:4 output; never automatically upscaled.
-gibbonpfp process portrait.jpg --output profiles/ --uncapped
-gibbonpfp process portrait.jpg --output profiles/ --uncapped --size 720x960
+headshotflow process portrait.jpg --output profiles/ --uncapped
+headshotflow process portrait.jpg --output profiles/ --uncapped --size 720x960
 
 # Brightness, reference matching, and screen sharpening.
-gibbonpfp process photos/ --output profiles/ --brightness 0.3
-gibbonpfp process photos/ --output profiles/ --reference reference.jpg
-gibbonpfp process portrait.jpg --output profiles/ --screen-sharpening low
-gibbonpfp process portrait.jpg --output profiles/ --screen-sharpening off
+headshotflow process photos/ --output profiles/ --brightness 0.3
+headshotflow process photos/ --output profiles/ --reference reference.jpg
+headshotflow process portrait.jpg --output profiles/ --screen-sharpening low
+headshotflow process portrait.jpg --output profiles/ --screen-sharpening off
 
 # RAW development followed by the same portrait pipeline.
-gibbonpfp process portrait.NEF --output profiles/ --white-balance custom \
+headshotflow process portrait.NEF --output profiles/ --white-balance custom \
   --temperature 5500 --tint 1.05 --highlight 3
 
 # Desktop presets also work with the CLI; reports support JSON and CSV.
-gibbonpfp process photos/ --output profiles/ --preset preset.json --report report.csv
-gibbonpfp --help
+headshotflow process photos/ --output profiles/ --preset preset.json --report report.csv
+headshotflow --help
 ```
 
 Exit codes: **0** success; **2** held photos or per-file failures; **1** invalid
@@ -513,10 +513,10 @@ alter photo settings, presets, sessions, CLI processing, or export dimensions.
 ```bash
 cmake --build --preset dev
 ctest --preset dev
-python3 scripts/test_cli.py build/gibbonpfp
+python3 scripts/test_cli.py build/headshotflow
 
 # Optional native Qt screenshot matrix using synthetic inputs.
-GIBBON_TEST_SCREENSHOTS=/tmp/gibbon-ui-checks ctest --preset dev -R controller
+HEADSHOTFLOW_TEST_SCREENSHOTS=/tmp/headshotflow-ui-checks ctest --preset dev -R controller
 ```
 
 ### Public portrait benchmarks
@@ -524,12 +524,12 @@ GIBBON_TEST_SCREENSHOTS=/tmp/gibbon-ui-checks ctest --preset dev -R controller
 ```bash
 python3 scripts/benchmark.py --download
 # Explicit opt-in only; requires the separately installed quality model.
-python3 scripts/benchmark.py --quality --output ~/.cache/gibbon-benchmarks/reports/quality
+python3 scripts/benchmark.py --quality --output ~/.cache/headshotflow-benchmarks/reports/quality
 ```
 
 The six [pinned Commons portraits](benchmarks/portraits.json) include attribution,
 license links, checksums, and visual challenge categories. Downloads and reports
-stay under `~/.cache/gibbon-benchmarks`, outside Git. The runner uses `gibbon_core`
+stay under `~/.cache/headshotflow-benchmarks`, outside Git. The runner uses `headshotflow_core`
 with fixed 360 × 480 PNG, 65% export / 55% removal context, zero feather, and
 Standard sharpening. Each image has a cold model/cache run and three warmed runs;
 OS disk caches are uncontrolled. Reports include stage timings, devices, cache
@@ -567,7 +567,7 @@ docs/                Quickstart, shared design, build notes, and native screensh
 Current functionality includes the two-pane editor, headroom-aware percentage
 zoom, sample portrait, screen sharpening, embedded Qt typography, and Arch/local
 installation workflows. Track bugs and proposed work in
-[Issues](https://github.com/wispdevon/GibbonPfp/issues); this README does not promise
+[Issues](https://github.com/wispdevon/HeadshotFlow/issues); this README does not promise
 unimplemented features or a release schedule. Additional GPU providers, cloud processing,
 and animated/multipage image workflows are outside the current scope.
 
@@ -576,7 +576,7 @@ and animated/multipage image workflows are outside the current scope.
 1. Open an issue describing the problem or proposed change.
 2. Fork the repository and work on a focused branch.
 3. Follow [AGENTS.md](AGENTS.md), [DESIGN.md](DESIGN.md), and the build instructions.
-   Keep image processing in `gibbon_core` so desktop and CLI behavior agree.
+   Keep image processing in `headshotflow_core` so desktop and CLI behavior agree.
 4. Run the relevant tests and include native screenshots for UI changes.
 5. Use a Conventional Commit subject and open a pull request with the change and
    validation results. Do not commit ONNX weights, build products, or private photos.
@@ -616,7 +616,7 @@ and the notices distributed with the application.
 
 Built by [Devon Labs](https://devonlabs.space).
 For support, bug reports, and feature requests, use
-[HeadshotFlow Issues](https://github.com/wispdevon/GibbonPfp/issues).
+[HeadshotFlow Issues](https://github.com/wispdevon/HeadshotFlow/issues).
 
 ## Acknowledgments
 

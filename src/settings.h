@@ -5,7 +5,7 @@
 #include <QRectF>
 #include <QStringList>
 
-namespace gibbon {
+namespace headshotflow {
 struct Settings {
     static constexpr int defaultHeight = 1024;
     static constexpr int defaultWidth = defaultHeight / 4 * 3;
@@ -31,4 +31,4 @@ QStringList expandInputs(const QStringList &paths, bool recursive = false);
 bool supportedPath(const QString &path);
 bool sameExistingFile(const QString &first, const QString &second);
 QString errorText(const std::exception &e);
-} // namespace gibbon
+} // namespace headshotflow

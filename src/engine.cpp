@@ -16,7 +16,7 @@
 #include <opencv2/imgproc.hpp>
 #include <stdexcept>
 
-namespace gibbon {
+namespace headshotflow {
 static void checkCancel(std::atomic_bool *c) {
     if (c && *c)
         throw std::runtime_error("Cancelled");
@@ -583,4 +583,4 @@ QString Engine::save(const Result &r, const QString &source, const QString &dire
     }
     throw std::runtime_error("Too many output name collisions");
 }
-} // namespace gibbon
+} // namespace headshotflow

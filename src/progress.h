@@ -5,7 +5,7 @@
 #include <utility>
 #include <vector>
 
-namespace gibbon {
+namespace headshotflow {
 struct Progress {
     std::string stage, detail;
     double elapsedMs = 0;

@@ -1,4 +1,5 @@
 #include "controller.h"
+#include "legacy_storage.h"
 #include "zip_export.h"
 #include <QCryptographicHash>
 #include <QDateTime>
@@ -18,7 +19,7 @@
 #include <algorithm>
 #include <optional>
 
-using namespace gibbon;
+using namespace headshotflow;
 static QVariantMap outputStyle(const Settings &settings) {
     return {{"format", settings.format}, {"quality", settings.quality},
             {"backgroundColor", settings.backgroundColor.name()}, {"capped", settings.capped},
@@ -50,6 +51,14 @@ static QString thumbnailKey(const QString &path, const QString &fingerprint) {
            QString::fromLatin1(
                QCryptographicHash::hash(path.toUtf8() + '\0' + fingerprint.toLatin1(),
                                         QCryptographicHash::Sha256).toHex());
+}
+static QString legacySamplePath(const QString &resource) {
+    const auto cache = legacyLocation(QStandardPaths::CacheLocation);
+    if (cache.isEmpty())
+        return {};
+    auto filename = QFileInfo(resource).fileName();
+    filename.replace("headshotflow-sample", "gibbon-sample");
+    return QDir(cache).filePath(filename);
 }
 QImage ImageStore::requestImage(const QString &id, QSize *size, const QSize &requested) {
     QMutexLocker lock(&mutex);
@@ -248,10 +257,14 @@ void Controller::loadSample() {
     const auto cacheError = [this](const QFileInfo &file) {
         fail(QString("Could not create or verify the cached sample image %1").arg(file.fileName()));
     };
-    // Check all sources before changing the cache or queue. Keep the existing
-    // filenames so old sessions resolve to the same originals.
+    // Check all sources before changing the cache or queue.
     for (const auto *resource : Engine::samplePortraitResources) {
-        const QFileInfo file(directory.filePath(QFileInfo(resource).fileName()));
+        auto path = directory.filePath(QFileInfo(resource).fileName());
+        const auto legacy = legacySamplePath(resource);
+        if (!legacy.isEmpty() && QFileInfo::exists(legacy) &&
+            std::any_of(queue.cbegin(), queue.cend(), [&](const Item &item) { return item.path == legacy; }))
+            path = legacy;
+        const QFileInfo file(path);
         Sample sample;
         sample.resource = resource;
         sample.photo.path = file.filePath();
@@ -323,20 +336,21 @@ bool Controller::seedSampleThumbnails() {
     bool seeded = false;
     for (const auto *resource : Engine::samplePortraitResources) {
         const auto path = directory.filePath(QFileInfo(resource).fileName());
-        const auto item = std::find_if(queue.cbegin(), queue.cend(), [&](const Item &candidate) {
-            return candidate.path == path;
-        });
-        if (item == queue.cend() || item->fingerprint.isEmpty())
-            continue;
-        const auto key = thumbnailKey(item->path, item->fingerprint);
-        if (images->contains(key) || item->fingerprint != sourceFingerprint(resource))
-            continue;
-        QImageReader reader(resource);
-        reader.setScaledSize(QSize(96, 128));
-        const auto thumbnail = reader.read();
-        if (!thumbnail.isNull()) {
-            images->put(key, thumbnail);
-            seeded = true;
+        const auto legacy = legacySamplePath(resource);
+        for (const auto &item : queue) {
+            if (item.path != path && (legacy.isEmpty() || item.path != legacy))
+                continue;
+            const auto key = thumbnailKey(item.path, item.fingerprint);
+            if (item.fingerprint.isEmpty() || images->contains(key) ||
+                item.fingerprint != sourceFingerprint(resource))
+                continue;
+            QImageReader reader(resource);
+            reader.setScaledSize(QSize(96, 128));
+            const auto thumbnail = reader.read();
+            if (!thumbnail.isNull()) {
+                images->put(key, thumbnail);
+                seeded = true;
+            }
         }
     }
     if (seeded)
@@ -819,7 +833,7 @@ void Controller::processMany(QVector<int> rows, const QVariantMap &exportRequest
         if (zip) {
             if (!replaceArchive) {
                 // Publish a new archive without replacing a path created during processing.
-                staging.emplace(QFileInfo(directory).absoluteDir().filePath(".gibbon-XXXXXX"));
+                staging.emplace(QFileInfo(directory).absoluteDir().filePath(".headshotflow-XXXXXX"));
                 if (!staging->isValid())
                     throw std::runtime_error(staging->errorString().toStdString());
                 archivePath = staging->filePath("export.zip");
@@ -935,7 +949,7 @@ void Controller::processMany(QVector<int> rows, const QVariantMap &exportRequest
             QString reportError;
             if (createFolder) QDir().mkpath(directory);
             QString stamp = QString::number(QDateTime::currentMSecsSinceEpoch());
-            QFile f(QDir(directory).filePath("gibbon-report-" + stamp + ".json"));
+            QFile f(QDir(directory).filePath("headshotflow-report-" + stamp + ".json"));
             const auto reportBytes = QJsonDocument(report).toJson();
             if (!f.open(QIODevice::WriteOnly | QIODevice::NewOnly)) {
                 reportError = " · report could not be written";

@@ -9,7 +9,7 @@
 | macOS 14+ Apple Silicon | macOS ARM CI runner | DMG |
 
 Compatibility is bounded by the packaged dependencies, not just the C++ source.
-See the actual [Actions runs](https://github.com/wispdevon/GibbonPfp/actions) for
+See the actual [Actions runs](https://github.com/wispdevon/HeadshotFlow/actions) for
 current build/package results. A configuration alone is not proof of validation.
 
 ## Dependencies
@@ -23,18 +23,18 @@ For release builds, clone vcpkg at the commit in `vcpkg.json`, bootstrap it, and
 
 ```bash
 python3 scripts/fetch_assets.py
-cmake --preset vcpkg -DGIBBON_BUNDLED_ORT=ON \
+cmake --preset vcpkg -DHEADSHOTFLOW_BUNDLED_ORT=ON \
   -DVCPKG_TARGET_TRIPLET=x64-linux-dynamic \
   -DVCPKG_OVERLAY_TRIPLETS="$PWD/cmake/triplets"
 cmake --build --preset vcpkg --parallel 3
 ctest --test-dir build-release --output-on-failure
-python3 scripts/test_cli.py build-release/gibbonpfp
+python3 scripts/test_cli.py build-release/headshotflow
 ```
 
 Use `x64-windows` or `arm64-osx-dynamic` as appropriate.
 The official Microsoft NuGet package for CPU ONNX Runtime 1.23.2 is SHA-256 pinned. This avoids
 requiring GPU drivers or compiling the entire runtime during every desktop build.
-`GIBBON_BUNDLED_ORT=OFF` uses the system runtime for development.
+`HEADSHOTFLOW_BUNDLED_ORT=OFF` uses the system runtime for development.
 
 Only face detection and Fast model weights are copied into packages. Run
 `python3 scripts/fetch_assets.py --quality` for optional local quality testing.
@@ -55,10 +55,10 @@ On macOS, use `hdiutil create` as in the workflow. Qt's deployment scripts colle
 Qt/QML runtime modules. Windows packages also include app-local native DLLs.
 Test the installed executable and its models, not only the build-directory copy.
 
-`scripts/test_packaged.py dist/portable bin/gibbonpfp` copies the distribution to
+`scripts/test_packaged.py dist/portable bin/headshotflow` copies the distribution to
 a temporary location and removes SDK search paths before checking startup, RAW,
-HEIC, crop review, batch exports, and large inputs. Use `bin/gibbonpfp.exe` on
-Windows or `gibbonpfp.app/Contents/MacOS/gibbonpfp` on macOS. Windows validation
+HEIC, crop review, batch exports, and large inputs. Use `bin/headshotflow.exe` on
+Windows or `headshotflow.app/Contents/MacOS/headshotflow` on macOS. Windows validation
 also checks DLL imports when MSVC's `dumpbin` is available. Linux packages use the
 host's glibc/loader pair; do not add glibc to an AppImage.
 
@@ -97,13 +97,13 @@ Never describe an unsigned/ad-hoc package as notarized or publisher-verified.
 `scripts/install-local.sh` builds and tests the current workspace, installs it under
 `~/.local`, registers its desktop launcher, then tests the installed executable with
 source-tree model lookup disabled. Run it after each update, then close and reopen
-HeadshotFlow from the launcher. `~/.local/bin/gibbonpfp --version` identifies each
+HeadshotFlow from the launcher. `~/.local/bin/headshotflow --version` identifies each
 installed update by commit and UTC timestamp. It uses system libraries and needs no sudo. Override
-`GIBBON_INSTALL_PREFIX` or `GIBBON_BUILD_JOBS` if needed.
+`HEADSHOTFLOW_INSTALL_PREFIX` or `HEADSHOTFLOW_BUILD_JOBS` if needed.
 
-`packaging/aur/PKGBUILD` and `.SRCINFO` define `gibbonpfp-git`, using the Git commit
+`packaging/aur/PKGBUILD` and `.SRCINFO` define `headshotflow-git`, using the Git commit
 count/hash for versions and checksum-pinned face/Fast models. The system install
-layout puts the executable in `/usr/bin`, models in `/usr/share/gibbonpfp/models`,
+layout puts the executable in `/usr/bin`, models in `/usr/share/headshotflow/models`,
 and launcher/icon/license files in their standard directories. It does not bundle
 Qt or native runtime libraries. See the [Arch VCS package guidelines](https://wiki.archlinux.org/title/VCS_package_guidelines).
 
@@ -111,7 +111,7 @@ To build the recipe after these source changes are available on the upstream Git
 remote, run `makepkg -si` in `packaging/aur`. Regenerate metadata with
 `makepkg --printsrcinfo > .SRCINFO` whenever the recipe changes. Publishing requires
 submitting these two files to the separate AUR Git repository; adding them here
-does not automatically publish an AUR listing. Once published, `yay -S gibbonpfp-git`
+does not automatically publish an AUR listing. Once published, `yay -S headshotflow-git`
 installs it, and `yay -Syu --devel` checks for newer upstream Git revisions.
 
 To package local edits before pushing them:
@@ -119,13 +119,13 @@ To package local edits before pushing them:
 ```bash
 scripts/package-arch-local.sh
 # Install the resulting main package (not the optional debug-symbol package):
-sudo pacman -U build-arch-local/gibbonpfp-git-*.pkg.tar.zst
+sudo pacman -U build-arch-local/headshotflow-git-*.pkg.tar.zst
 ```
 
 Local snapshot versions include a UTC timestamp. Package creation runs CTest and
 CLI integration checks. System installation requires administrator authentication.
 The per-user test installation is separate from pacman's package database; remove
-its `~/.local/bin/gibbonpfp` and `~/.local/share/applications/gibbonpfp.desktop` when
+its `~/.local/bin/headshotflow` and `~/.local/share/applications/headshotflow.desktop` when
 switching exclusively to the system package, so the user launcher does not shadow it.
 
 ## CI runtime and caches
